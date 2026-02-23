@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../models/export_format.dart';
+import '../models/gif_export_options.dart';
 import '../models/loop_mode.dart';
 import '../services/video_processor.dart';
 
@@ -25,6 +26,8 @@ class EditorController extends ChangeNotifier {
   LoopMode loopMode = LoopMode.forward;
   ExportFormat exportFormat = ExportFormat.mp4;
   int loopCount = 4;
+  GifQualityPreset gifQualityPreset = GifQualityPreset.medium;
+  GifFpsPreset gifFpsPreset = GifFpsPreset.fps10;
 
   bool isExporting = false;
   bool isFrameExporting = false;
@@ -171,9 +174,16 @@ class EditorController extends ChangeNotifier {
 
   void setExportFormat(ExportFormat format) {
     exportFormat = format;
-    if (format == ExportFormat.gif && loopCount != 1) {
-      loopCount = 1;
-    }
+    notifyListeners();
+  }
+
+  void setGifQualityPreset(GifQualityPreset preset) {
+    gifQualityPreset = preset;
+    notifyListeners();
+  }
+
+  void setGifFpsPreset(GifFpsPreset preset) {
+    gifFpsPreset = preset;
     notifyListeners();
   }
 
@@ -206,8 +216,10 @@ class EditorController extends ChangeNotifier {
         trimStart: trimStart,
         trimEnd: trimEnd,
         loopMode: loopMode,
-        loopCount: exportFormat == ExportFormat.gif ? 1 : loopCount,
+        loopCount: loopCount,
         format: exportFormat,
+        gifQualityPreset: gifQualityPreset,
+        gifFps: gifFpsPreset.value,
         muteAudio: true,
       );
 

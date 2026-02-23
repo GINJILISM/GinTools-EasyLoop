@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../models/export_format.dart';
+import '../models/gif_export_options.dart';
 import '../models/loop_mode.dart';
 import 'video_processor.dart';
 
@@ -15,9 +16,6 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
     this.ffmpegExecutable = 'ffmpeg',
     this.ffprobeExecutable = 'ffprobe',
   });
-
-  static const int _gifFps = 15;
-  static const int _gifMaxWidth = 960;
 
   final String ffmpegExecutable;
   final String ffprobeExecutable;
@@ -120,7 +118,12 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
 
         onProgress(0.65, 'GIFパレット生成中...');
         await _runFfmpeg(
-          buildGifPaletteArgs(inputPath: cycleInput, palettePath: palettePath),
+          buildGifPaletteArgs(
+            inputPath: cycleInput,
+            palettePath: palettePath,
+            fps: request.gifFps,
+            qualityPreset: request.gifQualityPreset,
+          ),
           expectedDurationSeconds: clipDuration.inMilliseconds / 1000,
           onStepProgress: (progress) {
             onProgress(
@@ -136,6 +139,8 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
             inputPath: cycleInput,
             palettePath: palettePath,
             outputPath: request.outputPath,
+            fps: request.gifFps,
+            qualityPreset: request.gifQualityPreset,
           ),
           expectedDurationSeconds: clipDuration.inMilliseconds / 1000,
           onStepProgress: (progress) {
@@ -352,11 +357,11 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
   List<String> buildGifPaletteArgs({
     required String inputPath,
     required String palettePath,
-    int fps = _gifFps,
-    int maxWidth = _gifMaxWidth,
+    required int fps,
+    required GifQualityPreset qualityPreset,
   }) {
     final filter =
-        'fps=$fps,scale=min($maxWidth\\,iw):-1:flags=lanczos,palettegen=stats_mode=diff';
+        'fps=$fps,${_gifScaleFilter(qualityPreset)},palettegen=stats_mode=diff';
     return <String>['-y', '-i', inputPath, '-vf', filter, palettePath];
   }
 
@@ -365,11 +370,11 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
     required String inputPath,
     required String palettePath,
     required String outputPath,
-    int fps = _gifFps,
-    int maxWidth = _gifMaxWidth,
+    required int fps,
+    required GifQualityPreset qualityPreset,
   }) {
     final filter =
-        '[0:v]fps=$fps,scale=min($maxWidth\\,iw):-1:flags=lanczos[x];'
+        '[0:v]fps=$fps,${_gifScaleFilter(qualityPreset)}[x];'
         '[x][1:v]paletteuse=dither=sierra2_4a';
     return <String>[
       '-y',
@@ -383,6 +388,17 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
       '0',
       outputPath,
     ];
+  }
+
+  String _gifScaleFilter(GifQualityPreset qualityPreset) {
+    switch (qualityPreset) {
+      case GifQualityPreset.low:
+        return 'scale=min(200\\,iw):-1:flags=lanczos';
+      case GifQualityPreset.medium:
+        return 'scale=trunc(iw*0.5/2)*2:-1:flags=lanczos';
+      case GifQualityPreset.high:
+        return 'scale=iw:-1:flags=lanczos';
+    }
   }
 
   @visibleForTesting

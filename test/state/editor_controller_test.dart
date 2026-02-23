@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gintoolflutter/src/models/export_format.dart';
+import 'package:gintoolflutter/src/models/gif_export_options.dart';
 import 'package:gintoolflutter/src/models/loop_mode.dart';
 import 'package:gintoolflutter/src/services/video_processor.dart';
 import 'package:gintoolflutter/src/state/editor_controller.dart';
@@ -63,13 +64,14 @@ void main() {
     expect(controller.playheadSeconds, closeTo(3.75, 0.0001));
   });
 
-  test('GIF選択時にループ回数は1に固定される', () {
+  test('GIF品質/FPS設定を保持できる', () {
     final controller = EditorController(videoProcessor: _FakeProcessor());
-    controller.setLoopCount(8);
 
-    controller.setExportFormat(ExportFormat.gif);
+    controller.setGifQualityPreset(GifQualityPreset.low);
+    controller.setGifFpsPreset(GifFpsPreset.fps24);
 
-    expect(controller.loopCount, 1);
+    expect(controller.gifQualityPreset, GifQualityPreset.low);
+    expect(controller.gifFpsPreset, GifFpsPreset.fps24);
   });
 
   test('書き出しリクエストに反映される', () async {

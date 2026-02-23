@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gintoolflutter/src/models/gif_export_options.dart';
 import 'package:gintoolflutter/src/services/ffmpeg_cli_video_processor.dart';
 import 'package:gintoolflutter/src/services/video_processor.dart';
 
@@ -10,11 +11,15 @@ void main() {
       final paletteArgs = processor.buildGifPaletteArgs(
         inputPath: 'cycle.mp4',
         palettePath: 'palette.png',
+        fps: 24,
+        qualityPreset: GifQualityPreset.medium,
       );
       final renderArgs = processor.buildGifRenderArgs(
         inputPath: 'cycle.mp4',
         palettePath: 'palette.png',
         outputPath: 'out.gif',
+        fps: 24,
+        qualityPreset: GifQualityPreset.medium,
       );
 
       expect(paletteArgs.join(' '), contains('palettegen'));

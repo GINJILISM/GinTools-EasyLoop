@@ -13,8 +13,10 @@ import 'package:open_filex/open_filex.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/export_format.dart';
+import '../../models/gif_export_options.dart';
 import '../../models/loop_mode.dart';
 import '../../models/timeline_thumbnail.dart';
 import '../../services/ffmpeg_cli_video_processor.dart';
@@ -49,6 +51,15 @@ class _EditorScreenState extends State<EditorScreen> {
   static const double _defaultFrameRate = 30.0;
   static const double _loopBoundaryEpsilonSeconds = 0.03;
   static const double _reverseStepSeconds = 1 / _defaultFrameRate;
+
+  static const String _prefExportFormat = 'export_format';
+  static const String _prefLoopCount = 'export_loop_count';
+  static const String _prefGifQuality = 'gif_quality';
+  static const String _prefGifFps = 'gif_fps';
+  static const String _prefImageExportDir = 'image_export_dir';
+  static const String _prefVideoExportDir = 'video_export_dir';
+  static const String _prefGifExportDir = 'gif_export_dir';
+  static const String _prefSaveToPhotoLibrary = 'save_to_photo_library';
 
   late final Player _player;
   late final VideoController _videoController;
@@ -97,6 +108,11 @@ class _EditorScreenState extends State<EditorScreen> {
   double _lastThumbnailInputZoom = -1;
 
   List<TimelineThumbnail> _thumbnails = const <TimelineThumbnail>[];
+
+  String? _imageExportDirectory;
+  String? _videoExportDirectory;
+  String? _gifExportDirectory;
+  bool _saveToPhotoLibrary = true;
 
   bool get _supportsDesktopDrop {
     if (kIsWeb) return false;
@@ -172,6 +188,7 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Future<void> _initialize() async {
+    await _loadExportSettings();
     await _editorController.loadDuration(widget.inputPath);
     _editorController.resetTrimToFullRange();
     _playheadNotifier.value = 0;
@@ -191,6 +208,76 @@ class _EditorScreenState extends State<EditorScreen> {
     }
   }
 
+
+  Future<void> _loadExportSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final formatName = prefs.getString(_prefExportFormat);
+    ExportFormat? format;
+    for (final item in ExportFormat.values) {
+      if (item.name == formatName) {
+        format = item;
+        break;
+      }
+    }
+    if (format != null) {
+      _editorController.setExportFormat(format);
+    }
+
+    _editorController.setLoopCount(prefs.getInt(_prefLoopCount) ?? _editorController.loopCount);
+
+    final qualityName = prefs.getString(_prefGifQuality);
+    GifQualityPreset? quality;
+    for (final item in GifQualityPreset.values) {
+      if (item.name == qualityName) {
+        quality = item;
+        break;
+      }
+    }
+    if (quality != null) {
+      _editorController.setGifQualityPreset(quality);
+    }
+
+    final fpsName = prefs.getString(_prefGifFps);
+    GifFpsPreset? fps;
+    for (final item in GifFpsPreset.values) {
+      if (item.name == fpsName) {
+        fps = item;
+        break;
+      }
+    }
+    if (fps != null) {
+      _editorController.setGifFpsPreset(fps);
+    }
+
+    _imageExportDirectory = _normalizeDirectory(prefs.getString(_prefImageExportDir));
+    _videoExportDirectory = _normalizeDirectory(prefs.getString(_prefVideoExportDir));
+    _gifExportDirectory = _normalizeDirectory(prefs.getString(_prefGifExportDir));
+    _saveToPhotoLibrary = prefs.getBool(_prefSaveToPhotoLibrary) ?? true;
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  Future<void> _persistExportSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_prefExportFormat, _editorController.exportFormat.name);
+    await prefs.setInt(_prefLoopCount, _editorController.loopCount);
+    await prefs.setString(_prefGifQuality, _editorController.gifQualityPreset.name);
+    await prefs.setString(_prefGifFps, _editorController.gifFpsPreset.name);
+    await prefs.setString(_prefImageExportDir, _imageExportDirectory ?? '');
+    await prefs.setString(_prefVideoExportDir, _videoExportDirectory ?? '');
+    await prefs.setString(_prefGifExportDir, _gifExportDirectory ?? '');
+    await prefs.setBool(_prefSaveToPhotoLibrary, _saveToPhotoLibrary);
+  }
+
+
+  String? _normalizeDirectory(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return null;
+    }
+    return value;
+  }
   void _handleControllerChanged() {
     if (_editorController.totalDuration <= Duration.zero) {
       return;
@@ -667,7 +754,8 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Future<void> _startExport(EditorController controller) async {
-    final outputPath = await _selectOutputPath(controller.exportFormat);
+    final isMobilePhotoLibrary = _isMobilePlatform && _saveToPhotoLibrary;
+    final outputPath = await _resolveVideoOutputPath(controller.exportFormat);
     if (outputPath == null) return;
 
     final success = await controller.export(
@@ -679,14 +767,17 @@ class _EditorScreenState extends State<EditorScreen> {
 
     final messenger = ScaffoldMessenger.of(context);
     if (success) {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text(
-            '\u66F8\u304D\u51FA\u3057\u304C\u5B8C\u4E86\u3057\u307E\u3057\u305F\u3002',
+      final exportedPath = controller.lastOutputPath;
+      if (isMobilePhotoLibrary && exportedPath != null) {
+        await _storeExportToGallery(exportedPath, controller.exportFormat.label);
+      } else {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('書き出しが完了しました。'),
+            behavior: SnackBarBehavior.floating,
           ),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+        );
+      }
     } else if (controller.errorMessage != null) {
       messenger.showSnackBar(
         SnackBar(
@@ -698,21 +789,10 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Future<void> _exportCurrentFrame(EditorController controller) async {
-    final isMobile = _isMobilePlatform;
-    String? outputPath;
-
-    if (_isDesktopPlatform) {
-      outputPath = await _selectFrameOutputPath();
-      if (outputPath == null) {
-        return;
-      }
-    } else {
-      final tempDir = await getTemporaryDirectory();
-      final timestamp = DateTime.now().toIso8601String().replaceAll(
-        RegExp('[:.]'),
-        '-',
-      );
-      outputPath = p.join(tempDir.path, 'frame_$timestamp.jpg');
+    final isMobilePhotoLibrary = _isMobilePlatform && _saveToPhotoLibrary;
+    final outputPath = await _resolveFrameOutputPath();
+    if (outputPath == null) {
+      return;
     }
 
     final success = await controller.exportCurrentFrameJpeg(
@@ -741,16 +821,14 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
 
-    if (isMobile) {
+    if (isMobilePhotoLibrary) {
       await _storeFrameToGallery(framePath);
       return;
     }
 
     messenger.showSnackBar(
       SnackBar(
-        content: Text(
-          '\u30D5\u30EC\u30FC\u30E0\u753B\u50CF\u3092\u66F8\u304D\u51FA\u3057\u307E\u3057\u305F: $framePath',
-        ),
+        content: Text('フレーム画像を書き出しました: $framePath'),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -792,67 +870,90 @@ class _EditorScreenState extends State<EditorScreen> {
     }
   }
 
-  Future<String?> _selectOutputPath(ExportFormat format) async {
-    final timestamp = DateTime.now().toIso8601String().replaceAll(
-      RegExp('[:.]'),
-      '-',
-    );
-    final suggestedName = 'loop_$timestamp.${format.extension}';
 
+  Future<void> _storeExportToGallery(String filePath, String formatLabel) async {
+    if (!mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
     try {
-      final selected = await FilePicker.platform.saveFile(
-        dialogTitle: '\u66F8\u304D\u51FA\u3057\u5148\u3092\u9078\u629E',
-        fileName: suggestedName,
-        type: FileType.custom,
-        allowedExtensions: <String>[format.extension],
-      );
-      if (selected != null && selected.isNotEmpty) {
-        return selected;
+      final result = await ImageGallerySaver.saveFile(filePath);
+      final isSuccess =
+          (result['isSuccess'] == true) || (result['success'] == true);
+      if (!isSuccess) {
+        throw Exception('保存処理が失敗しました。');
       }
-    } catch (_) {
-      // saveFile非対応環境ではDocumentsにフォールバック。
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('$formatLabel を写真ライブラリに保存しました。'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('写真ライブラリ保存に失敗しました: $error'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
-
-    final docsDir = await getApplicationDocumentsDirectory();
-    return p.join(docsDir.path, suggestedName);
   }
 
-  Future<String?> _selectFrameOutputPath() async {
-    final timestamp = DateTime.now().toIso8601String().replaceAll(
-      RegExp('[:.]'),
-      '-',
-    );
-    final suggestedName = 'frame_$timestamp.jpg';
+  Future<String?> _resolveVideoOutputPath(ExportFormat format) async {
+    final timestamp = DateTime.now().toIso8601String().replaceAll(RegExp('[:.]'), '-');
+    final name = 'loop_$timestamp.${format.extension}';
 
-    try {
-      final selected = await FilePicker.platform.saveFile(
-        dialogTitle:
-            '\u753B\u50CF\u66F8\u304D\u51FA\u3057\u5148\u3092\u9078\u629E',
-        fileName: suggestedName,
-        type: FileType.custom,
-        allowedExtensions: const <String>['jpg', 'jpeg'],
-      );
-      if (selected != null && selected.isNotEmpty) {
-        return selected;
-      }
-    } catch (_) {
-      // saveFile非対応環境ではDocumentsにフォールバック。
+    if (_isMobilePlatform && _saveToPhotoLibrary) {
+      final tempDir = await getTemporaryDirectory();
+      return p.join(tempDir.path, name);
     }
 
-    final docsDir = await getApplicationDocumentsDirectory();
-    return p.join(docsDir.path, suggestedName);
+    final directory = format == ExportFormat.gif ? _gifExportDirectory : _videoExportDirectory;
+    if (directory == null || directory.trim().isEmpty) {
+      _showPathRequiredMessage();
+      return null;
+    }
+    return p.join(directory, name);
   }
 
-  String _formatDuration(Duration duration) {
-    final totalSeconds = duration.inSeconds;
-    final seconds = totalSeconds % 60;
-    final minutes = (totalSeconds ~/ 60) % 60;
-    final hours = totalSeconds ~/ 3600;
+  Future<String?> _resolveFrameOutputPath() async {
+    final timestamp = DateTime.now().toIso8601String().replaceAll(RegExp('[:.]'), '-');
+    final name = 'frame_$timestamp.jpg';
 
-    if (hours > 0) {
-      return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    if (_isMobilePlatform && _saveToPhotoLibrary) {
+      final tempDir = await getTemporaryDirectory();
+      return p.join(tempDir.path, name);
     }
-    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+
+    final directory = _imageExportDirectory;
+    if (directory == null || directory.trim().isEmpty) {
+      _showPathRequiredMessage();
+      return null;
+    }
+    return p.join(directory, name);
+  }
+
+  void _showPathRequiredMessage() {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('保存先パスを設定してください。'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _selectDirectory(ValueSetter<String?> onChanged) async {
+    final selected = await FilePicker.platform.getDirectoryPath(dialogTitle: '保存先フォルダを選択');
+    if (selected == null || selected.isEmpty) {
+      return;
+    }
+    onChanged(selected);
+    await _persistExportSettings();
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
@@ -1018,9 +1119,165 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
+
+  Future<void> _showExportSettingsModal(EditorController controller) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return AlertDialog(
+              title: const Text('書き出し設定'),
+              content: SizedBox(
+                width: 540,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      DropdownButtonFormField<ExportFormat>(
+                        value: controller.exportFormat,
+                        decoration: const InputDecoration(labelText: '書き出し形式'),
+                        items: ExportFormat.values
+                            .map((format) => DropdownMenuItem<ExportFormat>(value: format, child: Text(format.label)))
+                            .toList(),
+                        onChanged: (value) async {
+                          if (value == null) return;
+                          controller.setExportFormat(value);
+                          await _persistExportSettings();
+                          setModalState(() {});
+                          if (mounted) setState(() {});
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      const Text('ループ回数'),
+                      Slider(
+                        value: controller.loopCount.toDouble(),
+                        min: 1,
+                        max: 20,
+                        divisions: 19,
+                        label: '${controller.loopCount}',
+                        onChanged: (value) async {
+                          controller.setLoopCount(value.round());
+                          await _persistExportSettings();
+                          setModalState(() {});
+                          if (mounted) setState(() {});
+                        },
+                      ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Text('${controller.loopCount}回'),
+                      ),
+                      const Divider(height: 24),
+                      DropdownButtonFormField<GifQualityPreset>(
+                        value: controller.gifQualityPreset,
+                        decoration: const InputDecoration(labelText: 'GIF品質'),
+                        items: GifQualityPreset.values
+                            .map((preset) => DropdownMenuItem<GifQualityPreset>(value: preset, child: Text(preset.label)))
+                            .toList(),
+                        onChanged: (value) async {
+                          if (value == null) return;
+                          controller.setGifQualityPreset(value);
+                          await _persistExportSettings();
+                          setModalState(() {});
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<GifFpsPreset>(
+                        value: controller.gifFpsPreset,
+                        decoration: const InputDecoration(labelText: 'GIF FPS'),
+                        items: GifFpsPreset.values
+                            .map((preset) => DropdownMenuItem<GifFpsPreset>(value: preset, child: Text(preset.label)))
+                            .toList(),
+                        onChanged: (value) async {
+                          if (value == null) return;
+                          controller.setGifFpsPreset(value);
+                          await _persistExportSettings();
+                          setModalState(() {});
+                        },
+                      ),
+                      const Divider(height: 24),
+                      _buildPathSettingRow(
+                        label: '画像書き出しパス',
+                        value: _imageExportDirectory,
+                        enabled: !(_isMobilePlatform && _saveToPhotoLibrary),
+                        onPick: () => _selectDirectory((value) => _imageExportDirectory = value),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildPathSettingRow(
+                        label: '動画書き出しパス',
+                        value: _videoExportDirectory,
+                        enabled: !(_isMobilePlatform && _saveToPhotoLibrary),
+                        onPick: () => _selectDirectory((value) => _videoExportDirectory = value),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildPathSettingRow(
+                        label: 'GIF書き出しパス',
+                        value: _gifExportDirectory,
+                        enabled: !(_isMobilePlatform && _saveToPhotoLibrary),
+                        onPick: () => _selectDirectory((value) => _gifExportDirectory = value),
+                      ),
+                      if (_isMobilePlatform) ...<Widget>[
+                        const Divider(height: 24),
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('写真ライブラリに直接保存'),
+                          value: _saveToPhotoLibrary,
+                          onChanged: (value) async {
+                            _saveToPhotoLibrary = value;
+                            await _persistExportSettings();
+                            setModalState(() {});
+                            if (mounted) setState(() {});
+                          },
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('閉じる'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildPathSettingRow({
+    required String label,
+    required String? value,
+    required bool enabled,
+    required VoidCallback onPick,
+  }) {
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: TextFormField(
+            initialValue: value ?? '',
+            enabled: false,
+            decoration: InputDecoration(
+              labelText: label,
+              border: const OutlineInputBorder(),
+              hintText: enabled ? '未設定' : '写真ライブラリ保存時は無効',
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        OutlinedButton(
+          onPressed: enabled ? onPick : null,
+          child: const Text('選択'),
+        ),
+      ],
+    );
+  }
+
   Widget _buildControlPanel(BuildContext context, EditorController controller) {
     final iosUnsupported = defaultTargetPlatform == TargetPlatform.iOS;
-    final isVideoExport = controller.exportFormat == ExportFormat.mp4;
     final exportActionDisabled =
         controller.isExporting ||
         controller.isFrameExporting ||
@@ -1087,66 +1344,20 @@ class _EditorScreenState extends State<EditorScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: <Widget>[
-                    SizedBox(
-                      width: 170,
-                      child: DropdownButtonFormField<ExportFormat>(
-                        initialValue: controller.exportFormat,
-                        isDense: true,
-                        decoration: const InputDecoration(
-                          labelText: '\u66F8\u304D\u51FA\u3057\u5F62\u5F0F',
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                        ),
-                        items: ExportFormat.values
-                            .map(
-                              (format) => DropdownMenuItem<ExportFormat>(
-                                value: format,
-                                child: Text(format.label),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: exportActionDisabled
-                            ? null
-                            : (value) {
-                                if (value != null) {
-                                  controller.setExportFormat(value);
-                                }
-                              },
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    if (isVideoExport)
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: <Widget>[
-                          const Text('\u56DE\u6570'),
-                          SizedBox(
-                            width: 120,
-                            child: Slider(
-                              value: controller.loopCount.toDouble(),
-                              min: 1,
-                              max: 20,
-                              divisions: 19,
-                              label: '${controller.loopCount}',
-                              onChanged: exportActionDisabled
-                                  ? null
-                                  : (value) =>
-                                        controller.setLoopCount(value.round()),
-                            ),
-                          ),
-                          Text('${controller.loopCount}'),
-                          const SizedBox(width: 10),
-                        ],
-                      ),
                     FilledButton.icon(
                       onPressed: exportActionDisabled || iosUnsupported
                           ? null
                           : () => _startExport(controller),
                       icon: const Icon(Icons.movie_creation_rounded),
-                      label: const Text('\u66F8\u304D\u51FA\u3057'),
+                      label: const Text('書き出し'),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      tooltip: '書き出し設定',
+                      onPressed: exportActionDisabled
+                          ? null
+                          : () => _showExportSettingsModal(controller),
+                      icon: const Icon(Icons.settings),
                     ),
                   ],
                 ),
@@ -1154,13 +1365,6 @@ class _EditorScreenState extends State<EditorScreen> {
             ),
           ),
         ),
-        if (controller.exportFormat == ExportFormat.gif) ...<Widget>[
-          const SizedBox(height: 6),
-          Text(
-            '\u0047\u0049\u0046\u306F\u0050\u0068\u0061\u0073\u0065\u0020\u0032\u5B9F\u88C5\u3067\u3059\u3002\u0031\u30B5\u30A4\u30AF\u30EB\u3092\u7121\u9650\u30EB\u30FC\u30D7\u3067\u51FA\u529B\u3057\u307E\u3059\u3002',
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
-          ),
-        ],
         if (iosUnsupported) ...<Widget>[
           const SizedBox(height: 6),
           Text(

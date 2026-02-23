@@ -1,4 +1,5 @@
 import '../models/export_format.dart';
+import '../models/gif_export_options.dart';
 import '../models/loop_mode.dart';
 
 typedef ProgressCallback = void Function(double progress, String message);
@@ -12,6 +13,8 @@ class ExportRequest {
     required this.loopMode,
     required this.loopCount,
     required this.format,
+    required this.gifQualityPreset,
+    required this.gifFps,
     this.muteAudio = true,
   });
 
@@ -22,6 +25,8 @@ class ExportRequest {
   final LoopMode loopMode;
   final int loopCount;
   final ExportFormat format;
+  final GifQualityPreset gifQualityPreset;
+  final int gifFps;
   final bool muteAudio;
 }
 
