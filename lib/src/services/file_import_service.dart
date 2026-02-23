@@ -1,0 +1,48 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:path/path.dart' as p;
+
+class FileImportService {
+  static const List<String> supportedExtensions = <String>[
+    'mp4',
+    'mov',
+    'm4v',
+    'avi',
+    'mkv',
+    'webm',
+  ];
+
+  bool isVideoPath(String path) {
+    final extension = p.extension(path).replaceFirst('.', '').toLowerCase();
+    return supportedExtensions.contains(extension);
+  }
+
+  bool isSupportedVideoFile(File file) {
+    return file.existsSync() && isVideoPath(file.path);
+  }
+
+  String? validateVideoPath(String? path) {
+    if (path == null || path.trim().isEmpty) {
+      return '動画ファイルが選択されていません。';
+    }
+    if (!isVideoPath(path)) {
+      return '未対応のファイル形式です。対応形式: ${supportedExtensions.join(', ')}';
+    }
+    return null;
+  }
+
+  Future<String?> pickVideoFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: supportedExtensions,
+      allowMultiple: false,
+      dialogTitle: '動画ファイルを選択',
+    );
+
+    if (result == null || result.files.isEmpty) {
+      return null;
+    }
+    return result.files.single.path;
+  }
+}
