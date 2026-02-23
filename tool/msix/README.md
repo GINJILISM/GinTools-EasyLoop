@@ -1,4 +1,4 @@
-﻿# Windows MSIX Build & File Association
+# Windows MSIX Build & File Association
 
 ## 前提
 
@@ -14,6 +14,15 @@
 2. MSIX を作成
    - `flutter pub run msix:create --certificate-path <path-to-pfx> --certificate-password <password>`
 
+### 開発用インストール（証明書エラー回避）
+
+管理者 PowerShell で以下を実行してください。
+
+- `.\tool\msix\install_dev_msix.ps1`
+
+このスクリプトは `.cer` を `LocalMachine\Root` / `LocalMachine\TrustedPeople` に登録し、
+`EasyLoop.msix` をインストールします。
+
 ## 関連付け
 
 `pubspec.yaml` の `msix_config.file_extension` で以下を宣言しています。
@@ -25,7 +34,7 @@
 - `.mkv`
 - `.webm`
 
-インストール後、これらの動画ファイルを右クリックして「このアプリで開く」を選ぶと、
+インストール後、これらの動画ファイルを右クリックして「このアプリで開く > GinTools-EasyLoop」を選ぶと、
 アプリ起動時に対象ファイルが引数として渡され、編集画面へ直接遷移します。
 
 ## 注意

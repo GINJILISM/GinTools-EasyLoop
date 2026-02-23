@@ -5,8 +5,8 @@ Future<bool> showReplaceInputDialog(BuildContext context) async {
     context: context,
     builder: (context) {
       return AlertDialog(
-        title: const Text('別動画に切り替えますか？'),
-        content: const Text('現在の編集状態は破棄されます。'),
+        title: const Text('別の動画に切り替えますか？'),
+        content: const Text('現在の編集中セッションは新しい動画に置き換えられます。'),
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),

@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_gallery_saver/image_gallery_saver.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:open_filex/open_filex.dart';
@@ -20,6 +22,7 @@ import '../../services/file_import_service.dart';
 import '../../services/timeline_thumbnail_service.dart';
 import '../../state/editor_controller.dart';
 import '../widgets/editor_shell.dart';
+import '../widgets/playback_transport_bar.dart';
 import '../widgets/preview_stage.dart';
 import '../widgets/replace_input_dialog.dart';
 import '../widgets/timeline_zoom_bar.dart';
@@ -43,6 +46,9 @@ class EditorScreen extends StatefulWidget {
 
 class _EditorScreenState extends State<EditorScreen> {
   static const double _tileBaseWidth = 96;
+  static const double _defaultFrameRate = 30.0;
+  static const double _loopBoundaryEpsilonSeconds = 0.03;
+  static const double _reverseStepSeconds = 1 / _defaultFrameRate;
 
   late final Player _player;
   late final VideoController _videoController;
@@ -58,8 +64,12 @@ class _EditorScreenState extends State<EditorScreen> {
   Timer? _thumbnailDebounce;
   Timer? _reverseTicker;
   Timer? _scrubSeekTimer;
+
   bool _reverseTickBusy = false;
   bool _isScrubSeekInFlight = false;
+  bool _isThumbnailBuildInProgress = false;
+  bool _thumbnailBuildPending = false;
+  bool _thumbnailBuildPendingForce = false;
 
   bool _isPlaybackActive = true;
   bool _isReverseDirection = false;
@@ -67,6 +77,7 @@ class _EditorScreenState extends State<EditorScreen> {
   bool _isLoadingThumbnails = false;
   bool _isDraggingReplace = false;
   bool _isScrubbing = false;
+  bool _isLoopBoundaryTransitioning = false;
 
   bool _resumePlaybackAfterScrub = false;
   bool _resumeReverseAfterScrub = false;
@@ -82,12 +93,24 @@ class _EditorScreenState extends State<EditorScreen> {
   double _lastLoadedZoom = -1;
   int _lastLoadedViewportBucket = -1;
   LoopMode _lastLoopMode = LoopMode.forward;
+  Duration _lastThumbnailInputDuration = Duration.zero;
+  double _lastThumbnailInputZoom = -1;
 
   List<TimelineThumbnail> _thumbnails = const <TimelineThumbnail>[];
 
   bool get _supportsDesktopDrop {
     if (kIsWeb) return false;
     return Platform.isWindows || Platform.isMacOS || Platform.isLinux;
+  }
+
+  bool get _isDesktopPlatform {
+    if (kIsWeb) return false;
+    return Platform.isWindows || Platform.isMacOS || Platform.isLinux;
+  }
+
+  bool get _isMobilePlatform {
+    if (kIsWeb) return false;
+    return Platform.isAndroid || Platform.isIOS;
   }
 
   @override
@@ -127,33 +150,34 @@ class _EditorScreenState extends State<EditorScreen> {
 
       final trimStart = _editorController.trimStartSeconds;
       final trimEnd = _editorController.trimEndSeconds;
+      if (trimEnd <= trimStart + EditorController.minTrimLengthSeconds) {
+        return;
+      }
+      final boundarySeconds = math.max(
+        trimStart,
+        trimEnd - _loopBoundaryEpsilonSeconds,
+      );
 
       if (_editorController.loopMode == LoopMode.pingPong) {
-        if (!_isReverseDirection && currentSeconds >= trimEnd) {
-          _isReverseDirection = true;
-          if (mounted) {
-            setState(() {});
-          }
-          await _player.pause();
-          _startReverseTicker();
+        if (!_isReverseDirection && currentSeconds >= boundarySeconds) {
+          await _enterReversePhase();
         }
         return;
       }
 
-      if (currentSeconds >= trimEnd) {
-        await _player.seek(Duration(milliseconds: (trimStart * 1000).round()));
-        _playheadNotifier.value = trimStart;
-        if (_isPlaybackActive) {
-          await _player.play();
-        }
+      if (currentSeconds >= boundarySeconds) {
+        await _restartForwardLoop(trimStart);
       }
     });
   }
 
   Future<void> _initialize() async {
     await _editorController.loadDuration(widget.inputPath);
+    _editorController.resetTrimToFullRange();
+    _playheadNotifier.value = 0;
     try {
       await _player.open(Media(widget.inputPath));
+      await _player.seek(Duration.zero);
       await _player.play();
       _scheduleThumbnailBuild(force: true);
     } catch (error) {
@@ -181,21 +205,63 @@ class _EditorScreenState extends State<EditorScreen> {
         if (_isPlaybackActive) {
           unawaited(_player.play());
         }
-        if (mounted) {
-          setState(() {});
+        if (mounted) setState(() {});
+      } else if (_editorController.loopMode == LoopMode.pingPong &&
+          _isPlaybackActive &&
+          _editorController.isAutoLoopEnabled) {
+        final trimStart = _editorController.trimStartSeconds;
+        final trimEnd = _editorController.trimEndSeconds;
+        final boundary = math.max(
+          trimStart,
+          trimEnd - _loopBoundaryEpsilonSeconds,
+        );
+        if (_playheadNotifier.value >= boundary) {
+          unawaited(_enterReversePhase());
         }
       }
     }
 
-    _scheduleThumbnailBuild(force: false);
+    final durationChanged =
+        _editorController.totalDuration != _lastThumbnailInputDuration;
+    final zoomChanged =
+        (_editorController.zoomLevel - _lastThumbnailInputZoom).abs() > 0.001;
+    if (durationChanged || zoomChanged) {
+      _lastThumbnailInputDuration = _editorController.totalDuration;
+      _lastThumbnailInputZoom = _editorController.zoomLevel;
+      _scheduleThumbnailBuild(force: false);
+    }
   }
 
   void _scheduleThumbnailBuild({required bool force}) {
     _thumbnailDebounce?.cancel();
     _thumbnailDebounce = Timer(
       force ? Duration.zero : const Duration(milliseconds: 260),
-      () => _buildThumbnails(force: force),
+      () => _enqueueThumbnailBuild(force: force),
     );
+  }
+
+  void _enqueueThumbnailBuild({required bool force}) {
+    if (_isThumbnailBuildInProgress) {
+      _thumbnailBuildPending = true;
+      _thumbnailBuildPendingForce = _thumbnailBuildPendingForce || force;
+      return;
+    }
+    unawaited(_runThumbnailBuild(force: force));
+  }
+
+  Future<void> _runThumbnailBuild({required bool force}) async {
+    _isThumbnailBuildInProgress = true;
+    try {
+      await _buildThumbnails(force: force);
+    } finally {
+      _isThumbnailBuildInProgress = false;
+      if (_thumbnailBuildPending) {
+        final nextForce = _thumbnailBuildPendingForce;
+        _thumbnailBuildPending = false;
+        _thumbnailBuildPendingForce = false;
+        unawaited(_runThumbnailBuild(force: nextForce));
+      }
+    }
   }
 
   Future<void> _buildThumbnails({required bool force}) async {
@@ -255,9 +321,7 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   void _applyDeferredThumbnailUpdates() {
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
     if (_deferredThumbnails == null && !_deferredClearLoading) {
       return;
     }
@@ -278,12 +342,60 @@ class _EditorScreenState extends State<EditorScreen> {
     });
   }
 
+  Future<void> _enterReversePhase() async {
+    if (_isLoopBoundaryTransitioning ||
+        _isReverseDirection ||
+        !_isPlaybackActive ||
+        _editorController.loopMode != LoopMode.pingPong ||
+        !_editorController.isAutoLoopEnabled) {
+      return;
+    }
+
+    _isLoopBoundaryTransitioning = true;
+    try {
+      _isReverseDirection = true;
+      if (mounted) setState(() {});
+      await _player.pause();
+      _startReverseTicker();
+    } finally {
+      _isLoopBoundaryTransitioning = false;
+    }
+  }
+
+  Future<void> _restartForwardLoop(double trimStartSeconds) async {
+    if (_isLoopBoundaryTransitioning) {
+      return;
+    }
+
+    _isLoopBoundaryTransitioning = true;
+    try {
+      _stopReverseTicker();
+      _isReverseDirection = false;
+
+      final target = _clampToDuration(trimStartSeconds);
+      _isSeekingByReverseTicker = true;
+      await _player.seek(Duration(milliseconds: (target * 1000).round()));
+      _isSeekingByReverseTicker = false;
+
+      _playheadNotifier.value = target;
+      _editorController.setPlayheadFromScrub(target);
+
+      if (_isPlaybackActive) {
+        await _player.play();
+      }
+      if (mounted) setState(() {});
+    } finally {
+      _isSeekingByReverseTicker = false;
+      _isLoopBoundaryTransitioning = false;
+    }
+  }
+
   void _startReverseTicker() {
     if (_reverseTicker != null) {
       return;
     }
 
-    _reverseTicker = Timer.periodic(const Duration(milliseconds: 40), (
+    _reverseTicker = Timer.periodic(const Duration(milliseconds: 33), (
       _,
     ) async {
       if (!_isPlaybackActive || !_isReverseDirection) {
@@ -304,24 +416,33 @@ class _EditorScreenState extends State<EditorScreen> {
         final trimEnd = _editorController.trimEndSeconds;
 
         final current = _playheadNotifier.value.clamp(trimStart, trimEnd);
-        final next = (current - 0.04).clamp(trimStart, trimEnd).toDouble();
+        final next = (current - _reverseStepSeconds)
+            .clamp(trimStart, trimEnd)
+            .toDouble();
 
         _isSeekingByReverseTicker = true;
         await _player.seek(Duration(milliseconds: (next * 1000).round()));
         _playheadNotifier.value = next;
+        _editorController.setPlayheadFromScrub(next);
         _isSeekingByReverseTicker = false;
 
-        if (next <= trimStart + 0.0001) {
+        if (next <= trimStart + _loopBoundaryEpsilonSeconds) {
+          _isSeekingByReverseTicker = true;
+          await _player.seek(
+            Duration(milliseconds: (trimStart * 1000).round()),
+          );
+          _playheadNotifier.value = trimStart;
+          _editorController.setPlayheadFromScrub(trimStart);
+          _isSeekingByReverseTicker = false;
           _isReverseDirection = false;
           _stopReverseTicker();
           if (_isPlaybackActive) {
             await _player.play();
           }
-          if (mounted) {
-            setState(() {});
-          }
+          if (mounted) setState(() {});
         }
       } finally {
+        _isSeekingByReverseTicker = false;
         _reverseTickBusy = false;
       }
     });
@@ -340,17 +461,61 @@ class _EditorScreenState extends State<EditorScreen> {
       await _player.pause();
     } else {
       _isPlaybackActive = true;
+      final trimStart = _editorController.trimStartSeconds;
+      final trimEnd = _editorController.trimEndSeconds;
+      final boundary = math.max(
+        trimStart,
+        trimEnd - _loopBoundaryEpsilonSeconds,
+      );
       if (_editorController.loopMode == LoopMode.pingPong &&
           _isReverseDirection) {
         await _player.pause();
         _startReverseTicker();
+      } else if (_editorController.loopMode == LoopMode.pingPong &&
+          _playheadNotifier.value >= boundary &&
+          _editorController.isAutoLoopEnabled) {
+        await _enterReversePhase();
       } else {
         await _player.play();
       }
     }
-    if (mounted) {
-      setState(() {});
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _jumpToTrimStart() async {
+    await _seekTo(_editorController.trimStartSeconds);
+  }
+
+  Future<void> _jumpToTrimEnd() async {
+    await _seekTo(_editorController.trimEndSeconds);
+  }
+
+  Future<void> _stepFrame({required bool forward}) async {
+    final step = 1 / _defaultFrameRate;
+    final delta = forward ? step : -step;
+    await _seekTo(_playheadNotifier.value + delta);
+  }
+
+  Future<void> _setTrimBoundaryAtPlayhead({required bool isStart}) async {
+    final playhead = _playheadNotifier.value;
+    final start = _editorController.trimStartSeconds;
+    final end = _editorController.trimEndSeconds;
+
+    if (isStart) {
+      final nextStart = playhead
+          .clamp(0.0, end - EditorController.minTrimLengthSeconds)
+          .toDouble();
+      _editorController.setTrimRange(startSeconds: nextStart, endSeconds: end);
+      await _seekTo(_playheadNotifier.value.clamp(nextStart, end).toDouble());
+      return;
     }
+
+    final maxSeconds = _editorController.totalDuration.inMilliseconds / 1000;
+    final nextEnd = playhead
+        .clamp(start + EditorController.minTrimLengthSeconds, maxSeconds)
+        .toDouble();
+    _editorController.setTrimRange(startSeconds: start, endSeconds: nextEnd);
+    await _seekTo(_playheadNotifier.value.clamp(start, nextEnd).toDouble());
   }
 
   double _clampToDuration(double seconds) {
@@ -366,6 +531,7 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
     _isScrubbing = true;
+    _isLoopBoundaryTransitioning = false;
     _resumePlaybackAfterScrub = _isPlaybackActive;
     _resumeReverseAfterScrub = _isReverseDirection;
     _pendingScrubSeconds = null;
@@ -397,6 +563,10 @@ class _EditorScreenState extends State<EditorScreen> {
 
     final target = _pendingScrubSeconds;
     if (target == null) {
+      if (!_isScrubbing) {
+        _scrubSeekTimer?.cancel();
+        _scrubSeekTimer = null;
+      }
       return;
     }
 
@@ -408,6 +578,9 @@ class _EditorScreenState extends State<EditorScreen> {
       _isScrubSeekInFlight = false;
       if (_pendingScrubSeconds != null) {
         unawaited(_flushScrubSeek());
+      } else if (!_isScrubbing) {
+        _scrubSeekTimer?.cancel();
+        _scrubSeekTimer = null;
       }
     }
   }
@@ -440,26 +613,23 @@ class _EditorScreenState extends State<EditorScreen> {
     }
 
     _applyDeferredThumbnailUpdates();
-    if (mounted) {
-      setState(() {});
-    }
+    if (mounted) setState(() {});
   }
 
   Future<void> _seekTo(double seconds) async {
     final target = _clampToDuration(seconds);
     _stopReverseTicker();
+    _isLoopBoundaryTransitioning = false;
     _isReverseDirection = false;
 
-    _editorController.seekTo(target);
     _playheadNotifier.value = target;
+    _editorController.setPlayheadFromScrub(target);
     await _player.seek(Duration(milliseconds: (target * 1000).round()));
 
     if (_isPlaybackActive) {
       await _player.play();
     }
-    if (mounted) {
-      setState(() {});
-    }
+    if (mounted) setState(() {});
   }
 
   Future<void> _handleDropReplace(String rawPath) async {
@@ -472,11 +642,13 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
 
-    if (_editorController.isExporting) {
+    if (_editorController.isExporting || _editorController.isFrameExporting) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('書き出し中は動画を切り替えできません。'),
+          content: Text(
+            '\u66F8\u304D\u51FA\u3057\u4E2D\u306F\u52D5\u753B\u3092\u5207\u308A\u66FF\u3048\u3067\u304D\u307E\u305B\u3093\u3002',
+          ),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -509,7 +681,9 @@ class _EditorScreenState extends State<EditorScreen> {
     if (success) {
       messenger.showSnackBar(
         const SnackBar(
-          content: Text('書き出しが完了しました。'),
+          content: Text(
+            '\u66F8\u304D\u51FA\u3057\u304C\u5B8C\u4E86\u3057\u307E\u3057\u305F\u3002',
+          ),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -517,6 +691,101 @@ class _EditorScreenState extends State<EditorScreen> {
       messenger.showSnackBar(
         SnackBar(
           content: Text(controller.errorMessage!),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _exportCurrentFrame(EditorController controller) async {
+    final isMobile = _isMobilePlatform;
+    String? outputPath;
+
+    if (_isDesktopPlatform) {
+      outputPath = await _selectFrameOutputPath();
+      if (outputPath == null) {
+        return;
+      }
+    } else {
+      final tempDir = await getTemporaryDirectory();
+      final timestamp = DateTime.now().toIso8601String().replaceAll(
+        RegExp('[:.]'),
+        '-',
+      );
+      outputPath = p.join(tempDir.path, 'frame_$timestamp.jpg');
+    }
+
+    final success = await controller.exportCurrentFrameJpeg(
+      inputPath: widget.inputPath,
+      positionSeconds: _playheadNotifier.value,
+      outputPath: outputPath,
+    );
+
+    if (!mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    if (!success) {
+      if (controller.errorMessage != null) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(controller.errorMessage!),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+
+    final framePath = controller.lastFrameOutputPath;
+    if (framePath == null) {
+      return;
+    }
+
+    if (isMobile) {
+      await _storeFrameToGallery(framePath);
+      return;
+    }
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          '\u30D5\u30EC\u30FC\u30E0\u753B\u50CF\u3092\u66F8\u304D\u51FA\u3057\u307E\u3057\u305F: $framePath',
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _storeFrameToGallery(String imagePath) async {
+    if (!mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final bytes = await File(imagePath).readAsBytes();
+      final result = await ImageGallerySaver.saveImage(
+        bytes,
+        quality: 100,
+        name: p.basenameWithoutExtension(imagePath),
+      );
+      final isSuccess =
+          (result['isSuccess'] == true) || (result['success'] == true);
+      if (!isSuccess) {
+        throw Exception('保存処理が失敗しました。');
+      }
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            '\u30D5\u30EC\u30FC\u30E0\u753B\u50CF\u3092\u30D5\u30A9\u30C8\u30E9\u30A4\u30D6\u30E9\u30EA\u306B\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            '\u30D5\u30A9\u30C8\u30E9\u30A4\u30D6\u30E9\u30EA\u4FDD\u5B58\u306B\u5931\u6557\u3057\u307E\u3057\u305F: $error',
+          ),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -532,7 +801,7 @@ class _EditorScreenState extends State<EditorScreen> {
 
     try {
       final selected = await FilePicker.platform.saveFile(
-        dialogTitle: '書き出し先を選択',
+        dialogTitle: '\u66F8\u304D\u51FA\u3057\u5148\u3092\u9078\u629E',
         fileName: suggestedName,
         type: FileType.custom,
         allowedExtensions: <String>[format.extension],
@@ -541,7 +810,33 @@ class _EditorScreenState extends State<EditorScreen> {
         return selected;
       }
     } catch (_) {
-      // saveFile未対応の環境ではDocumentsにフォールバック。
+      // saveFile非対応環境ではDocumentsにフォールバック。
+    }
+
+    final docsDir = await getApplicationDocumentsDirectory();
+    return p.join(docsDir.path, suggestedName);
+  }
+
+  Future<String?> _selectFrameOutputPath() async {
+    final timestamp = DateTime.now().toIso8601String().replaceAll(
+      RegExp('[:.]'),
+      '-',
+    );
+    final suggestedName = 'frame_$timestamp.jpg';
+
+    try {
+      final selected = await FilePicker.platform.saveFile(
+        dialogTitle:
+            '\u753B\u50CF\u66F8\u304D\u51FA\u3057\u5148\u3092\u9078\u629E',
+        fileName: suggestedName,
+        type: FileType.custom,
+        allowedExtensions: const <String>['jpg', 'jpeg'],
+      );
+      if (selected != null && selected.isNotEmpty) {
+        return selected;
+      }
+    } catch (_) {
+      // saveFile非対応環境ではDocumentsにフォールバック。
     }
 
     final docsDir = await getApplicationDocumentsDirectory();
@@ -594,13 +889,41 @@ class _EditorScreenState extends State<EditorScreen> {
                 onCloseRequested: widget.onCloseRequested,
                 showDropHighlight: _isDraggingReplace,
                 preview: PreviewStage(
-                  video: Video(controller: _videoController),
-                  isPlaying: _isPlaybackActive,
-                  onPlayPause: _togglePlayPause,
+                  video: Video(
+                    controller: _videoController,
+                    controls: NoVideoControls,
+                  ),
                   positionLabel:
                       '${_formatDuration(playheadDuration)}  ($trimSummary)',
                   isPingPong: controller.loopMode == LoopMode.pingPong,
                   isReverseDirection: _isReverseDirection,
+                  bottomOverlay: PlaybackTransportBar(
+                    isPlaying: _isPlaybackActive,
+                    isDisabled:
+                        controller.isExporting ||
+                        controller.totalDuration <= Duration.zero,
+                    onSetStart: () {
+                      unawaited(_setTrimBoundaryAtPlayhead(isStart: true));
+                    },
+                    onJumpStart: () {
+                      unawaited(_jumpToTrimStart());
+                    },
+                    onStepPrev: () {
+                      unawaited(_stepFrame(forward: false));
+                    },
+                    onPlayPause: () {
+                      unawaited(_togglePlayPause());
+                    },
+                    onStepNext: () {
+                      unawaited(_stepFrame(forward: true));
+                    },
+                    onJumpEnd: () {
+                      unawaited(_jumpToTrimEnd());
+                    },
+                    onSetEnd: () {
+                      unawaited(_setTrimBoundaryAtPlayhead(isStart: false));
+                    },
+                  ),
                 ),
                 timeline: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -643,14 +966,17 @@ class _EditorScreenState extends State<EditorScreen> {
                             : (seconds) {
                                 unawaited(_handleScrubEnd(seconds));
                               },
-                        onTrimChanged: (start, end) async {
+                        onTrimChanged: (start, end) {
                           controller.setTrimRange(
                             startSeconds: start,
                             endSeconds: end,
                           );
                           if (playheadSeconds < start ||
                               playheadSeconds > end) {
-                            await _seekTo(start);
+                            final target = _clampToDuration(start);
+                            _playheadNotifier.value = target;
+                            _pendingScrubSeconds = target;
+                            _startScrubSeekTimer();
                           }
                         },
                       ),
@@ -694,6 +1020,11 @@ class _EditorScreenState extends State<EditorScreen> {
 
   Widget _buildControlPanel(BuildContext context, EditorController controller) {
     final iosUnsupported = defaultTargetPlatform == TargetPlatform.iOS;
+    final isVideoExport = controller.exportFormat == ExportFormat.mp4;
+    final exportActionDisabled =
+        controller.isExporting ||
+        controller.isFrameExporting ||
+        controller.totalDuration <= Duration.zero;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -713,37 +1044,17 @@ class _EditorScreenState extends State<EditorScreen> {
                   )
                   .toList(),
               selected: <LoopMode>{controller.loopMode},
-              onSelectionChanged: controller.isExporting
+              onSelectionChanged: exportActionDisabled
                   ? null
                   : (selection) => controller.setLoopMode(selection.first),
             ),
             Row(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                const Text('回数'),
-                SizedBox(
-                  width: 120,
-                  child: Slider(
-                    value: controller.loopCount.toDouble(),
-                    min: 1,
-                    max: 20,
-                    divisions: 19,
-                    label: '${controller.loopCount}',
-                    onChanged: controller.isExporting
-                        ? null
-                        : (value) => controller.setLoopCount(value.round()),
-                  ),
-                ),
-                Text('${controller.loopCount}'),
-              ],
-            ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                const Text('範囲ループ'),
+                const Text('\u7BC4\u56F2\u30EB\u30FC\u30D7'),
                 Switch(
                   value: controller.isAutoLoopEnabled,
-                  onChanged: controller.isExporting
+                  onChanged: exportActionDisabled
                       ? null
                       : controller.setAutoLoopEnabled,
                 ),
@@ -752,75 +1063,131 @@ class _EditorScreenState extends State<EditorScreen> {
           ],
         ),
         const SizedBox(height: 8),
-        Wrap(
-          runSpacing: 8,
-          spacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: <Widget>[
-            SizedBox(
-              width: 180,
-              child: DropdownButtonFormField<ExportFormat>(
-                initialValue: controller.exportFormat,
-                decoration: const InputDecoration(
-                  labelText: '書き出し形式',
-                  border: OutlineInputBorder(),
+        Align(
+          alignment: Alignment.centerRight,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: <Widget>[
+                SizedBox(
+                  width: 260,
+                  child: OutlinedButton.icon(
+                    onPressed: exportActionDisabled || iosUnsupported
+                        ? null
+                        : () => _exportCurrentFrame(controller),
+                    icon: const Icon(Icons.image_rounded),
+                    label: const Text(
+                      '\u3053\u306E\u30D5\u30EC\u30FC\u30E0\u3092\u753B\u50CF\u66F8\u304D\u51FA\u3057',
+                    ),
+                  ),
                 ),
-                items: ExportFormat.values
-                    .map(
-                      (format) => DropdownMenuItem<ExportFormat>(
-                        value: format,
-                        child: Text(format.label),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: <Widget>[
+                    SizedBox(
+                      width: 170,
+                      child: DropdownButtonFormField<ExportFormat>(
+                        initialValue: controller.exportFormat,
+                        isDense: true,
+                        decoration: const InputDecoration(
+                          labelText: '\u66F8\u304D\u51FA\u3057\u5F62\u5F0F',
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                        ),
+                        items: ExportFormat.values
+                            .map(
+                              (format) => DropdownMenuItem<ExportFormat>(
+                                value: format,
+                                child: Text(format.label),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: exportActionDisabled
+                            ? null
+                            : (value) {
+                                if (value != null) {
+                                  controller.setExportFormat(value);
+                                }
+                              },
                       ),
-                    )
-                    .toList(),
-                onChanged: controller.isExporting
-                    ? null
-                    : (value) {
-                        if (value != null) {
-                          controller.setExportFormat(value);
-                        }
-                      },
-              ),
+                    ),
+                    const SizedBox(width: 10),
+                    if (isVideoExport)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          const Text('\u56DE\u6570'),
+                          SizedBox(
+                            width: 120,
+                            child: Slider(
+                              value: controller.loopCount.toDouble(),
+                              min: 1,
+                              max: 20,
+                              divisions: 19,
+                              label: '${controller.loopCount}',
+                              onChanged: exportActionDisabled
+                                  ? null
+                                  : (value) =>
+                                        controller.setLoopCount(value.round()),
+                            ),
+                          ),
+                          Text('${controller.loopCount}'),
+                          const SizedBox(width: 10),
+                        ],
+                      ),
+                    FilledButton.icon(
+                      onPressed: exportActionDisabled || iosUnsupported
+                          ? null
+                          : () => _startExport(controller),
+                      icon: const Icon(Icons.movie_creation_rounded),
+                      label: const Text('\u66F8\u304D\u51FA\u3057'),
+                    ),
+                  ],
+                ),
+              ],
             ),
-            FilledButton.icon(
-              onPressed:
-                  controller.isExporting ||
-                      controller.exportFormat == ExportFormat.gif ||
-                      iosUnsupported
-                  ? null
-                  : () => _startExport(controller),
-              icon: const Icon(Icons.movie_creation_rounded),
-              label: const Text('書き出し'),
-            ),
-            if (controller.exportFormat == ExportFormat.gif)
-              Text(
-                'GIFはPhase 2で実装予定です',
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            if (iosUnsupported)
-              Text(
-                'iOSではFFmpeg CLI未対応のため、書き出しは現状無効です。',
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-          ],
+          ),
         ),
+        if (controller.exportFormat == ExportFormat.gif) ...<Widget>[
+          const SizedBox(height: 6),
+          Text(
+            '\u0047\u0049\u0046\u306F\u0050\u0068\u0061\u0073\u0065\u0020\u0032\u5B9F\u88C5\u3067\u3059\u3002\u0031\u30B5\u30A4\u30AF\u30EB\u3092\u7121\u9650\u30EB\u30FC\u30D7\u3067\u51FA\u529B\u3057\u307E\u3059\u3002',
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+        ],
+        if (iosUnsupported) ...<Widget>[
+          const SizedBox(height: 6),
+          Text(
+            '\u0069\u004F\u0053\u3067\u306F\u0046\u0046\u006D\u0070\u0065\u0067\u0020\u0043\u004C\u0049\u672A\u5BFE\u5FDC\u306E\u305F\u3081\u3001\u66F8\u304D\u51FA\u3057\u306F\u73FE\u72B6\u7121\u52B9\u3067\u3059\u3002',
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+        ],
         if (controller.isExporting ||
+            controller.isFrameExporting ||
             controller.exportProgress > 0) ...<Widget>[
           const SizedBox(height: 8),
           LinearProgressIndicator(
-            value: controller.exportProgress == 0
+            value: controller.isExporting && controller.exportProgress == 0
                 ? null
                 : controller.exportProgress,
           ),
           const SizedBox(height: 6),
           Text(
-            '${(controller.exportProgress * 100).toStringAsFixed(0)}% ${controller.exportMessage}',
+            controller.isFrameExporting
+                ? '\u30D5\u30EC\u30FC\u30E0\u753B\u50CF\u3092\u66F8\u304D\u51FA\u3057\u4E2D...'
+                : '${(controller.exportProgress * 100).toStringAsFixed(0)}% ${controller.exportMessage}',
           ),
         ],
         if (controller.lastOutputPath != null) ...<Widget>[
           const SizedBox(height: 8),
           Text(
-            '出力先: ${controller.lastOutputPath}',
+            '\u51FA\u529B\u5148: ${controller.lastOutputPath}',
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -829,9 +1196,27 @@ class _EditorScreenState extends State<EditorScreen> {
             child: OutlinedButton.icon(
               onPressed: () => OpenFilex.open(controller.lastOutputPath!),
               icon: const Icon(Icons.folder_open_rounded),
-              label: const Text('保存先を開く'),
+              label: const Text('\u4FDD\u5B58\u5148\u3092\u958B\u304F'),
             ),
           ),
+        ],
+        if (controller.lastFrameOutputPath != null) ...<Widget>[
+          const SizedBox(height: 8),
+          Text(
+            '\u753B\u50CF\u51FA\u529B\u5148: ${controller.lastFrameOutputPath}',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (_isDesktopPlatform)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: () =>
+                    OpenFilex.open(controller.lastFrameOutputPath!),
+                icon: const Icon(Icons.image_search_rounded),
+                label: const Text('\u753B\u50CF\u3092\u958B\u304F'),
+              ),
+            ),
         ],
         if (controller.errorMessage != null) ...<Widget>[
           const SizedBox(height: 6),

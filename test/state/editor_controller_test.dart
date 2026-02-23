@@ -15,6 +15,11 @@ class _FakeProcessor implements VideoProcessor {
   }
 
   @override
+  Future<String> exportFrameJpeg(FrameExportRequest request) async {
+    return request.outputPath;
+  }
+
+  @override
   Future<Duration> probeDuration(String inputPath) async =>
       const Duration(seconds: 30);
 }
@@ -26,6 +31,15 @@ void main() {
 
     final pps = controller.pixelsPerSecondForViewport(1000);
     expect(pps, closeTo(100.0, 0.0001));
+  });
+
+  test('初期ロードでstart=0/end=durationになる', () {
+    final controller = EditorController(videoProcessor: _FakeProcessor());
+
+    controller.setTotalDuration(const Duration(seconds: 12));
+
+    expect(controller.trimStartSeconds, closeTo(0, 0.0001));
+    expect(controller.trimEndSeconds, closeTo(12, 0.0001));
   });
 
   test('trim更新時にplayheadが範囲内へ補正される', () {
@@ -49,6 +63,15 @@ void main() {
     expect(controller.playheadSeconds, closeTo(3.75, 0.0001));
   });
 
+  test('GIF選択時にループ回数は1に固定される', () {
+    final controller = EditorController(videoProcessor: _FakeProcessor());
+    controller.setLoopCount(8);
+
+    controller.setExportFormat(ExportFormat.gif);
+
+    expect(controller.loopCount, 1);
+  });
+
   test('書き出しリクエストに反映される', () async {
     final controller = EditorController(videoProcessor: _FakeProcessor());
     controller.setTotalDuration(const Duration(seconds: 10));
@@ -64,5 +87,19 @@ void main() {
 
     expect(ok, isTrue);
     expect(controller.lastOutputPath, 'out.mp4');
+  });
+
+  test('現在フレームのJPG書き出しが成功する', () async {
+    final controller = EditorController(videoProcessor: _FakeProcessor());
+    controller.setTotalDuration(const Duration(seconds: 10));
+
+    final ok = await controller.exportCurrentFrameJpeg(
+      inputPath: 'in.mp4',
+      positionSeconds: 2.5,
+      outputPath: 'frame.jpg',
+    );
+
+    expect(ok, isTrue);
+    expect(controller.lastFrameOutputPath, 'frame.jpg');
   });
 }

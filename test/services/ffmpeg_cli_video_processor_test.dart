@@ -1,0 +1,43 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:gintoolflutter/src/services/ffmpeg_cli_video_processor.dart';
+import 'package:gintoolflutter/src/services/video_processor.dart';
+
+void main() {
+  group('FfmpegCliVideoProcessor', () {
+    final processor = FfmpegCliVideoProcessor();
+
+    test('GIF用コマンドにpalettegen/paletteuse/-loop 0が含まれる', () {
+      final paletteArgs = processor.buildGifPaletteArgs(
+        inputPath: 'cycle.mp4',
+        palettePath: 'palette.png',
+      );
+      final renderArgs = processor.buildGifRenderArgs(
+        inputPath: 'cycle.mp4',
+        palettePath: 'palette.png',
+        outputPath: 'out.gif',
+      );
+
+      expect(paletteArgs.join(' '), contains('palettegen'));
+      expect(renderArgs.join(' '), contains('paletteuse'));
+      expect(renderArgs, contains('-loop'));
+      expect(renderArgs, contains('0'));
+    });
+
+    test('JPGフレーム書き出しは最高品質設定で生成される', () {
+      final args = processor.buildFrameJpegArgs(
+        request: FrameExportRequest(
+          inputPath: 'in.mp4',
+          outputPath: 'frame.jpg',
+          position: const Duration(milliseconds: 1234),
+        ),
+      );
+
+      expect(
+        args,
+        containsAll(<String>['-q:v', '1', '-qmin', '1', '-qmax', '1']),
+      );
+      expect(args, contains('yuvj444p'));
+      expect(args.last, 'frame.jpg');
+    });
+  });
+}

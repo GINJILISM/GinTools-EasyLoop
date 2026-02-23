@@ -30,15 +30,23 @@ class EditorShell extends StatelessWidget {
             flex: 4,
             child: Card(
               clipBehavior: Clip.antiAlias,
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  children: <Widget>[
-                    SizedBox(height: 180, child: timeline),
-                    const SizedBox(height: 10),
-                    Expanded(child: SingleChildScrollView(child: controls)),
-                  ],
-                ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final timelineHeight = (constraints.maxHeight * 0.45).clamp(
+                    64.0,
+                    180.0,
+                  );
+                  return Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      children: <Widget>[
+                        SizedBox(height: timelineHeight, child: timeline),
+                        const SizedBox(height: 8),
+                        Expanded(child: SingleChildScrollView(child: controls)),
+                      ],
+                    ),
+                  );
+                },
               ),
             ),
           ),
@@ -46,14 +54,18 @@ class EditorShell extends StatelessWidget {
       ),
     );
 
+    final titleStyle = Theme.of(
+      context,
+    ).textTheme.titleSmall?.copyWith(fontSize: 12, fontWeight: FontWeight.w500);
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('編集中: $title'),
+        title: Text('\u7de8\u96c6\u4e2d: $title', style: titleStyle),
         actions: <Widget>[
           TextButton.icon(
             onPressed: onCloseRequested,
-            icon: const Icon(Icons.home_rounded),
-            label: const Text('ホーム'),
+            icon: const Icon(Icons.video_library_outlined),
+            label: const Text('\u52d5\u753b\u3092\u9078\u629e'),
           ),
           const SizedBox(width: 10),
         ],
@@ -76,7 +88,7 @@ class EditorShell extends StatelessWidget {
                           horizontal: 18,
                           vertical: 10,
                         ),
-                        child: Text('ここにドロップして別動画へ切替'),
+                        child: Text('\u3053\u3053\u306b\u30c9\u30ed\u30c3\u30d7\u3057\u3066\u52d5\u753b\u3092\u7f6e\u304d\u63db\u3048'),
                       ),
                     ),
                   ),

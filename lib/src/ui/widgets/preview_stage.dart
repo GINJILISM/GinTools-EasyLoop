@@ -4,19 +4,17 @@ class PreviewStage extends StatelessWidget {
   const PreviewStage({
     super.key,
     required this.video,
-    required this.isPlaying,
-    required this.onPlayPause,
     required this.positionLabel,
     required this.isPingPong,
     required this.isReverseDirection,
+    this.bottomOverlay,
   });
 
   final Widget video;
-  final bool isPlaying;
-  final VoidCallback onPlayPause;
   final String positionLabel;
   final bool isPingPong;
   final bool isReverseDirection;
+  final Widget? bottomOverlay;
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +29,7 @@ class PreviewStage extends StatelessWidget {
             left: 14,
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.58),
+                color: Colors.black.withValues(alpha: 0.56),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Padding(
@@ -51,17 +49,16 @@ class PreviewStage extends StatelessWidget {
                 label: Text(isReverseDirection ? 'ピンポン: 逆方向' : 'ピンポン: 順方向'),
               ),
             ),
-          Positioned(
-            left: 14,
-            bottom: 14,
-            child: FloatingActionButton.small(
-              heroTag: 'preview_play_pause',
-              onPressed: onPlayPause,
-              child: Icon(
-                isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+          if (bottomOverlay != null)
+            Positioned(
+              left: 12,
+              right: 12,
+              bottom: 12,
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: bottomOverlay!,
               ),
             ),
-          ),
         ],
       ),
     );

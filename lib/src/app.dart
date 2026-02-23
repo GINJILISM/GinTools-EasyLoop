@@ -8,7 +8,7 @@ class LoopEditorApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'ループ動画エディタ',
+      title: 'GinTools-EasyLoop',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(

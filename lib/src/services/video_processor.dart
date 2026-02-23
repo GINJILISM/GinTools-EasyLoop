@@ -25,6 +25,22 @@ class ExportRequest {
   final bool muteAudio;
 }
 
+enum FrameExportQualityPreset { max }
+
+class FrameExportRequest {
+  FrameExportRequest({
+    required this.inputPath,
+    required this.outputPath,
+    required this.position,
+    this.qualityPreset = FrameExportQualityPreset.max,
+  });
+
+  final String inputPath;
+  final String outputPath;
+  final Duration position;
+  final FrameExportQualityPreset qualityPreset;
+}
+
 abstract class VideoProcessor {
   Future<Duration> probeDuration(String inputPath);
 
@@ -32,6 +48,8 @@ abstract class VideoProcessor {
     ExportRequest request, {
     required ProgressCallback onProgress,
   });
+
+  Future<String> exportFrameJpeg(FrameExportRequest request);
 }
 
 class ExportException implements Exception {

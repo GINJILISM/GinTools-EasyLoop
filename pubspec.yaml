@@ -44,6 +44,7 @@ dependencies:
   path_provider: ^2.1.5
   open_filex: ^4.7.0
   crypto: ^3.0.6
+  image_gallery_saver: ^2.0.3
 
 dev_dependencies:
   flutter_test:
@@ -69,7 +70,7 @@ flutter:
   uses-material-design: true
 
 msix_config:
-  display_name: Loop Video Editor
+  display_name: GinTools-EasyLoop
   publisher_display_name: GinTools
   identity_name: com.gintools.loopvideoeditor
   msix_version: 1.0.0.0

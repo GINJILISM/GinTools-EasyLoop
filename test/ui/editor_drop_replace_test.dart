@@ -31,13 +31,13 @@ class _DropReplaceHarness extends StatelessWidget {
 
 void main() {
   testWidgets('編集中ドロップ時に確認ダイアログが表示される', (tester) async {
-    await tester.pumpWidget(_DropReplaceHarness(onReplace: () {}));
+    await tester.pumpWidget(const _DropReplaceHarness(onReplace: _noop));
 
     await tester.tap(find.text('drop'));
     await tester.pumpAndSettle();
 
-    expect(find.text('別動画に切り替えますか？'), findsOneWidget);
-    expect(find.text('現在の編集状態は破棄されます。'), findsOneWidget);
+    expect(find.text('別の動画に切り替えますか？'), findsOneWidget);
+    expect(find.text('現在の編集中セッションは新しい動画に置き換えられます。'), findsOneWidget);
   });
 
   testWidgets('承認すると置換コールバックが発火する', (tester) async {
@@ -54,3 +54,5 @@ void main() {
     expect(replaced, isTrue);
   });
 }
+
+void _noop() {}

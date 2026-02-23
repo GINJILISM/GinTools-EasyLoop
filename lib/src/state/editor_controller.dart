@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import '../models/export_format.dart';
 import '../models/loop_mode.dart';
@@ -25,10 +27,12 @@ class EditorController extends ChangeNotifier {
   int loopCount = 4;
 
   bool isExporting = false;
+  bool isFrameExporting = false;
   double exportProgress = 0;
   String exportMessage = '';
   String? errorMessage;
   String? lastOutputPath;
+  String? lastFrameOutputPath;
 
   Duration get trimStart =>
       Duration(milliseconds: (trimStartSeconds * 1000).round());
@@ -37,6 +41,7 @@ class EditorController extends ChangeNotifier {
 
   bool get canExport =>
       !isExporting &&
+      !isFrameExporting &&
       totalDuration > Duration.zero &&
       trimEndSeconds - trimStartSeconds >= minTrimLengthSeconds;
 
@@ -53,7 +58,7 @@ class EditorController extends ChangeNotifier {
         setTotalDuration(probed);
       }
     } catch (_) {
-      // media player側のduration取得にフォールバック。
+      // プレイヤー側のduration取得にフォールバック。
     }
   }
 
@@ -82,6 +87,17 @@ class EditorController extends ChangeNotifier {
     playheadSeconds = playheadSeconds
         .clamp(trimStartSeconds, trimEndSeconds)
         .toDouble();
+    notifyListeners();
+  }
+
+  void resetTrimToFullRange() {
+    if (totalDuration <= Duration.zero) {
+      return;
+    }
+
+    trimStartSeconds = 0;
+    trimEndSeconds = totalDuration.inMilliseconds / 1000;
+    playheadSeconds = 0;
     notifyListeners();
   }
 
@@ -155,6 +171,9 @@ class EditorController extends ChangeNotifier {
 
   void setExportFormat(ExportFormat format) {
     exportFormat = format;
+    if (format == ExportFormat.gif && loopCount != 1) {
+      loopCount = 1;
+    }
     notifyListeners();
   }
 
@@ -175,7 +194,7 @@ class EditorController extends ChangeNotifier {
 
     isExporting = true;
     exportProgress = 0;
-    exportMessage = '書き出し準備中...';
+    exportMessage = '書き出しを開始しています...';
     errorMessage = null;
     lastOutputPath = null;
     notifyListeners();
@@ -187,7 +206,7 @@ class EditorController extends ChangeNotifier {
         trimStart: trimStart,
         trimEnd: trimEnd,
         loopMode: loopMode,
-        loopCount: loopCount,
+        loopCount: exportFormat == ExportFormat.gif ? 1 : loopCount,
         format: exportFormat,
         muteAudio: true,
       );
@@ -203,7 +222,7 @@ class EditorController extends ChangeNotifier {
 
       lastOutputPath = generatedPath;
       exportProgress = 1;
-      exportMessage = '書き出し完了';
+      exportMessage = '書き出しが完了しました。';
       notifyListeners();
       return true;
     } on ExportException catch (error) {
@@ -211,12 +230,68 @@ class EditorController extends ChangeNotifier {
       notifyListeners();
       return false;
     } catch (error) {
-      errorMessage = '書き出し時に不明なエラーが発生しました: $error';
+      errorMessage = '書き出し中に予期しないエラーが発生しました: $error';
       notifyListeners();
       return false;
     } finally {
       isExporting = false;
       notifyListeners();
     }
+  }
+
+  Future<bool> exportCurrentFrameJpeg({
+    required String inputPath,
+    required double positionSeconds,
+    String? outputPath,
+  }) async {
+    if (isExporting || isFrameExporting || totalDuration <= Duration.zero) {
+      errorMessage = '現在の状態ではフレーム書き出しできません。';
+      notifyListeners();
+      return false;
+    }
+
+    isFrameExporting = true;
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      final targetOutputPath = outputPath ?? await _defaultFrameOutputPath();
+      final clampedPosition = positionSeconds
+          .clamp(0.0, totalDuration.inMilliseconds / 1000)
+          .toDouble();
+
+      final generatedPath = await videoProcessor.exportFrameJpeg(
+        FrameExportRequest(
+          inputPath: inputPath,
+          outputPath: targetOutputPath,
+          position: Duration(milliseconds: (clampedPosition * 1000).round()),
+          qualityPreset: FrameExportQualityPreset.max,
+        ),
+      );
+
+      lastFrameOutputPath = generatedPath;
+      notifyListeners();
+      return true;
+    } on ExportException catch (error) {
+      errorMessage = error.message;
+      notifyListeners();
+      return false;
+    } catch (error) {
+      errorMessage = 'フレーム書き出し中に予期しないエラーが発生しました: $error';
+      notifyListeners();
+      return false;
+    } finally {
+      isFrameExporting = false;
+      notifyListeners();
+    }
+  }
+
+  Future<String> _defaultFrameOutputPath() async {
+    final docsDir = await getApplicationDocumentsDirectory();
+    final timestamp = DateTime.now().toIso8601String().replaceAll(
+      RegExp('[:.]'),
+      '-',
+    );
+    return p.join(docsDir.path, 'frame_$timestamp.jpg');
   }
 }

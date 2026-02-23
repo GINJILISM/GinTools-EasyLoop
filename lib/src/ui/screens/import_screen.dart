@@ -75,7 +75,7 @@ class _ImportScreenState extends State<ImportScreen> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'または「動画を選択」から開く\n開いたらそのままトリミング画面へ移動します',
+            'または「動画を選択」から開くと、すぐにトリミング編集画面へ移動します。',
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 18),
