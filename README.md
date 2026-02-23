@@ -1,4 +1,6 @@
 ﻿# GinTools-EasyLoop (Flutter)
+Simple cross-platform loop video editor for Windows/macOS/iOS.
+
 
 Windows/macOS を主対象にした GUI ベースのループ動画編集アプリです。  
 動画をドロップまたは選択すると、直接トリミング編集画面へ遷移します。
