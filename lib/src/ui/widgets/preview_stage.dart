@@ -29,7 +29,7 @@ class PreviewStage extends StatelessWidget {
             left: 14,
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.56),
+                color: Colors.black.withOpacity(0.56),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Padding(

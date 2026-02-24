@@ -32,7 +32,7 @@ class PlaybackTransportBar extends StatelessWidget {
     return DecoratedBox(
       key: const Key('preview-transport-overlay'),
       decoration: BoxDecoration(
-        color: colorScheme.surface.withValues(alpha: 0.88),
+        color: colorScheme.surface.withOpacity(0.88),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: colorScheme.outlineVariant),
       ),
