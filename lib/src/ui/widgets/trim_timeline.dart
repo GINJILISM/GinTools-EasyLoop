@@ -150,7 +150,7 @@ class _TrimTimelineState extends State<TrimTimeline> {
                           final pointerX = details.localPosition.dx;
                           final isNearHandle =
                               (pointerX - trimStartPx).abs() <= 14 ||
-                              (pointerX - trimEndPx).abs() <= 14;
+                                  (pointerX - trimEndPx).abs() <= 14;
                           if (isNearHandle) {
                             return;
                           }
@@ -202,7 +202,7 @@ class _TrimTimelineState extends State<TrimTimeline> {
                               top: 0,
                               bottom: 0,
                               child: ColoredBox(
-                                color: Colors.black.withValues(alpha: 0.40),
+                                color: Colors.black.withOpacity(0.40),
                               ),
                             ),
                             Positioned(
@@ -211,7 +211,7 @@ class _TrimTimelineState extends State<TrimTimeline> {
                               top: 0,
                               bottom: 0,
                               child: ColoredBox(
-                                color: Colors.black.withValues(alpha: 0.40),
+                                color: Colors.black.withOpacity(0.40),
                               ),
                             ),
                             Positioned(
@@ -252,14 +252,13 @@ class _TrimTimelineState extends State<TrimTimeline> {
                                 _isDraggingHandle = true;
                               },
                               onDrag: (deltaPx) {
-                                final nextEnd =
-                                    _pxToSeconds(
-                                      trimEndPx + deltaPx,
-                                      effectivePps,
-                                    ).clamp(
-                                      widget.trimStartSeconds + 0.1,
-                                      _totalSeconds,
-                                    );
+                                final nextEnd = _pxToSeconds(
+                                  trimEndPx + deltaPx,
+                                  effectivePps,
+                                ).clamp(
+                                  widget.trimStartSeconds + 0.1,
+                                  _totalSeconds,
+                                );
                                 widget.onTrimChanged(
                                   widget.trimStartSeconds,
                                   nextEnd,
@@ -300,8 +299,7 @@ class _TrimTimelineState extends State<TrimTimeline> {
     }
 
     final now = DateTime.now();
-    final isDoubleTap =
-        _lastTapUpTime != null &&
+    final isDoubleTap = _lastTapUpTime != null &&
         now.difference(_lastTapUpTime!).inMilliseconds <= 320 &&
         _lastTapUpPosition != null &&
         (event.position - _lastTapUpPosition!).distance <= 24;
@@ -480,7 +478,7 @@ class _TrimTimelineState extends State<TrimTimeline> {
           bottom: 0,
           child: Container(
             width: 1,
-            color: Colors.white.withValues(alpha: 0.22),
+            color: Colors.white.withOpacity(0.22),
           ),
         ),
       );
@@ -533,7 +531,7 @@ class _TrimTimelineState extends State<TrimTimeline> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: <BoxShadow>[
                     BoxShadow(
-                      color: color.withValues(alpha: 0.32),
+                      color: color.withOpacity(0.32),
                       blurRadius: 12,
                     ),
                   ],

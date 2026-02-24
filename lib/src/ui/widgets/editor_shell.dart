@@ -78,7 +78,7 @@ class EditorShell extends StatelessWidget {
               child: IgnorePointer(
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Colors.lightBlueAccent.withValues(alpha: 0.18),
+                    color: Colors.lightBlueAccent.withOpacity(0.18),
                     border: Border.all(color: Colors.lightBlueAccent, width: 3),
                   ),
                   child: const Center(
@@ -88,7 +88,8 @@ class EditorShell extends StatelessWidget {
                           horizontal: 18,
                           vertical: 10,
                         ),
-                        child: Text('\u3053\u3053\u306b\u30c9\u30ed\u30c3\u30d7\u3057\u3066\u52d5\u753b\u3092\u7f6e\u304d\u63db\u3048'),
+                        child: Text(
+                            '\u3053\u3053\u306b\u30c9\u30ed\u30c3\u30d7\u3057\u3066\u52d5\u753b\u3092\u7f6e\u304d\u63db\u3048'),
                       ),
                     ),
                   ),

@@ -52,8 +52,8 @@ class _ImportScreenState extends State<ImportScreen> {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         color: _dragging
-            ? colorScheme.primaryContainer.withValues(alpha: 0.70)
-            : colorScheme.surface.withValues(alpha: 0.88),
+            ? colorScheme.primaryContainer.withOpacity(0.70)
+            : colorScheme.surface.withOpacity(0.88),
         border: Border.all(
           color: _dragging ? colorScheme.primary : colorScheme.outlineVariant,
           width: 2,

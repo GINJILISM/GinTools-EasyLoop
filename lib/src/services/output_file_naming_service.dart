@@ -44,7 +44,7 @@ class OutputFileNamingService {
         .replaceAll('{filename}', sourceBaseName);
     baseName = _sanitizeFileNameComponent(
       baseName,
-      fallback: '$loopTypeName\_$sourceBaseName',
+      fallback: '${loopTypeName}_$sourceBaseName',
     );
 
     await Directory(directoryPath).create(recursive: true);
@@ -64,7 +64,7 @@ class OutputFileNamingService {
 
     for (var i = 1; i < 10000; i++) {
       final suffix = i.toString().padLeft(3, '0');
-      final candidate = p.join(directory, '$baseName\_$suffix$extension');
+      final candidate = p.join(directory, '${baseName}_$suffix$extension');
       if (!await File(candidate).exists()) {
         return candidate;
       }
