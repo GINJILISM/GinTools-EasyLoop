@@ -107,6 +107,33 @@ flutter build ipa --release
 
 ---
 
+## 4-1. 2026-02-25 実測メモ（今回の検証で確定したこと）
+
+今回、以下の順で **Simulator Debug ビルド成功** を確認済み:
+
+```bash
+flutter clean && flutter pub get
+cd ios && pod install
+flutter build ios --simulator
+xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -configuration Debug -sdk iphonesimulator build
+```
+
+### 成功条件（今回の環境）
+
+- `xcode-select -p` が `/Applications/Xcode.app/Contents/Developer` を指していること
+- `pod` コマンドが導入済みであること（例: `brew install cocoapods`）
+- `ios/Podfile` が存在し、`pod install` が完了していること
+
+### 実運用での注意点
+
+- `ios/Runner.xcworkspace` を使う（`Runner.xcodeproj` では Pod 連携が欠落しやすい）
+- `flutter create --platforms=ios --overwrite .` は既存ファイルを広範囲に上書きするため原則避ける
+- `Application not configured for iOS` が出たら、`ios/Podfile` の有無と `flutter pub get` 後の再生成状態を確認する
+- `pod install` 後に Pods 側 warning（低い deployment target など）が出ても、即 build fail とは限らない（今回 `xcodebuild` は成功）
+
+
+---
+
 ## 5. iPhone / iPad ビルド検証チェックリスト
 
 各変更ごとに最低限以下を確認:

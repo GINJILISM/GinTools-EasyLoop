@@ -20,28 +20,31 @@ class EditorShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final isCompact = screenWidth < 420;
+
     final body = Padding(
-      padding: const EdgeInsets.all(12),
+      padding: EdgeInsets.all(isCompact ? 8 : 12),
       child: Column(
         children: <Widget>[
-          Expanded(flex: 6, child: preview),
-          const SizedBox(height: 12),
+          Expanded(flex: isCompact ? 5 : 6, child: preview),
+          SizedBox(height: isCompact ? 8 : 12),
           Expanded(
-            flex: 4,
+            flex: isCompact ? 5 : 4,
             child: Card(
               clipBehavior: Clip.antiAlias,
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final timelineHeight = (constraints.maxHeight * 0.45).clamp(
                     64.0,
-                    180.0,
+                    isCompact ? 140.0 : 180.0,
                   );
                   return Padding(
-                    padding: const EdgeInsets.all(12),
+                    padding: EdgeInsets.all(isCompact ? 8 : 12),
                     child: Column(
                       children: <Widget>[
                         SizedBox(height: timelineHeight, child: timeline),
-                        const SizedBox(height: 8),
+                        SizedBox(height: isCompact ? 6 : 8),
                         Expanded(child: SingleChildScrollView(child: controls)),
                       ],
                     ),
@@ -60,13 +63,25 @@ class EditorShell extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('\u7de8\u96c6\u4e2d: $title', style: titleStyle),
+        title: Text(
+          '\u7de8\u96c6\u4e2d: $title',
+          style: titleStyle,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: <Widget>[
-          TextButton.icon(
-            onPressed: onCloseRequested,
-            icon: const Icon(Icons.video_library_outlined),
-            label: const Text('\u52d5\u753b\u3092\u9078\u629e'),
-          ),
+          if (isCompact)
+            IconButton(
+              tooltip: '\u52d5\u753b\u3092\u9078\u629e',
+              onPressed: onCloseRequested,
+              icon: const Icon(Icons.video_library_outlined),
+            )
+          else
+            TextButton.icon(
+              onPressed: onCloseRequested,
+              icon: const Icon(Icons.video_library_outlined),
+              label: const Text('\u52d5\u753b\u3092\u9078\u629e'),
+            ),
           const SizedBox(width: 10),
         ],
       ),

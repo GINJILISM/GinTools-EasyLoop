@@ -27,6 +27,7 @@ class PreviewStage extends StatelessWidget {
           Positioned(
             top: 14,
             left: 14,
+            right: isPingPong ? 130 : 14,
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: Colors.black.withOpacity(0.56),
@@ -37,7 +38,11 @@ class PreviewStage extends StatelessWidget {
                   horizontal: 10,
                   vertical: 6,
                 ),
-                child: Text(positionLabel),
+                child: Text(
+                  positionLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
           ),
@@ -46,7 +51,10 @@ class PreviewStage extends StatelessWidget {
               top: 14,
               right: 14,
               child: Chip(
-                label: Text(isReverseDirection ? 'ピンポン: 逆方向' : 'ピンポン: 順方向'),
+                visualDensity: VisualDensity.compact,
+                label: Text(
+                  isReverseDirection ? 'ピンポン: 逆方向' : 'ピンポン: 順方向',
+                ),
               ),
             ),
           if (bottomOverlay != null)
