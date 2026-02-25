@@ -35,13 +35,15 @@ class EditorScreen extends StatefulWidget {
   const EditorScreen({
     super.key,
     required this.inputPath,
-    required this.onCloseRequested,
+    required this.onRequestOpenFromFiles,
+    required this.onRequestOpenFromLibrary,
     required this.onReplaceInputPath,
     this.pickDirectoryOverride,
   });
 
   final String inputPath;
-  final VoidCallback onCloseRequested;
+  final Future<void> Function() onRequestOpenFromFiles;
+  final Future<void> Function() onRequestOpenFromLibrary;
   final ValueChanged<String> onReplaceInputPath;
   final Future<String?> Function(String dialogTitle)? pickDirectoryOverride;
 
@@ -137,6 +139,9 @@ class _EditorScreenState extends State<EditorScreen> {
     return Platform.isAndroid || Platform.isIOS;
   }
 
+  SnackBarBehavior get _snackBarBehavior =>
+      _isMobilePlatform ? SnackBarBehavior.fixed : SnackBarBehavior.floating;
+
   @override
   void initState() {
     super.initState();
@@ -195,6 +200,22 @@ class _EditorScreenState extends State<EditorScreen> {
     });
   }
 
+
+  Future<void> _handleOpenFromFilesFromAppBar() async {
+    if (_editorController.isExporting || _editorController.isFrameExporting) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('書き出し中は入力動画を切り替えできません。'),
+          behavior: _snackBarBehavior,
+        ),
+      );
+      return;
+    }
+
+    await widget.onRequestOpenFromFiles();
+  }
+
   Future<void> _initialize() async {
     await _loadExportSettings();
     await _editorController.loadDuration(widget.inputPath);
@@ -210,7 +231,7 @@ class _EditorScreenState extends State<EditorScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('動画の読み込みに失敗しました: $error'),
-          behavior: SnackBarBehavior.floating,
+          behavior: _snackBarBehavior,
         ),
       );
     }
@@ -776,7 +797,7 @@ class _EditorScreenState extends State<EditorScreen> {
     if (err != null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(err), behavior: SnackBarBehavior.floating),
+        SnackBar(content: Text(err), behavior: _snackBarBehavior),
       );
       return;
     }
@@ -784,11 +805,11 @@ class _EditorScreenState extends State<EditorScreen> {
     if (_editorController.isExporting || _editorController.isFrameExporting) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
             '\u66F8\u304D\u51FA\u3057\u4E2D\u306F\u52D5\u753B\u3092\u5207\u308A\u66FF\u3048\u3067\u304D\u307E\u305B\u3093\u3002',
           ),
-          behavior: SnackBarBehavior.floating,
+          behavior: _snackBarBehavior,
         ),
       );
       return;
@@ -827,9 +848,9 @@ class _EditorScreenState extends State<EditorScreen> {
         );
       } else {
         messenger.showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text('書き出しが完了しました。'),
-            behavior: SnackBarBehavior.floating,
+            behavior: _snackBarBehavior,
           ),
         );
       }
@@ -837,7 +858,7 @@ class _EditorScreenState extends State<EditorScreen> {
       messenger.showSnackBar(
         SnackBar(
           content: Text(controller.errorMessage!),
-          behavior: SnackBarBehavior.floating,
+          behavior: _snackBarBehavior,
         ),
       );
     }
@@ -864,7 +885,7 @@ class _EditorScreenState extends State<EditorScreen> {
         messenger.showSnackBar(
           SnackBar(
             content: Text(controller.errorMessage!),
-            behavior: SnackBarBehavior.floating,
+            behavior: _snackBarBehavior,
           ),
         );
       }
@@ -884,7 +905,7 @@ class _EditorScreenState extends State<EditorScreen> {
     messenger.showSnackBar(
       SnackBar(
         content: Text('フレーム画像を書き出しました: $framePath'),
-        behavior: SnackBarBehavior.floating,
+        behavior: _snackBarBehavior,
       ),
     );
   }
@@ -906,11 +927,11 @@ class _EditorScreenState extends State<EditorScreen> {
         throw Exception('保存に失敗しました。');
       }
       messenger.showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
             '\u30D5\u30EC\u30FC\u30E0\u753B\u50CF\u3092\u30D5\u30A9\u30C8\u30E9\u30A4\u30D6\u30E9\u30EA\u306B\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002',
           ),
-          behavior: SnackBarBehavior.floating,
+          behavior: _snackBarBehavior,
         ),
       );
     } catch (error) {
@@ -919,7 +940,7 @@ class _EditorScreenState extends State<EditorScreen> {
           content: Text(
             '\u30D5\u30A9\u30C8\u30E9\u30A4\u30D6\u30E9\u30EA\u4FDD\u5B58\u306B\u5931\u6557\u3057\u307E\u3057\u305F: $error',
           ),
-          behavior: SnackBarBehavior.floating,
+          behavior: _snackBarBehavior,
         ),
       );
     }
@@ -933,7 +954,12 @@ class _EditorScreenState extends State<EditorScreen> {
 
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final result = await ImageGallerySaver.saveFile(filePath);
+      final useIosAssetCreation = !kIsWeb && Platform.isIOS;
+      final result = await ImageGallerySaver.saveFile(
+        filePath,
+        name: p.basename(filePath),
+        isReturnPathOfIOS: useIosAssetCreation,
+      );
       final isSuccess =
           (result['isSuccess'] == true) || (result['success'] == true);
       if (!isSuccess) {
@@ -942,14 +968,14 @@ class _EditorScreenState extends State<EditorScreen> {
       messenger.showSnackBar(
         SnackBar(
           content: Text('$formatLabel を写真ライブラリに保存しました。'),
-          behavior: SnackBarBehavior.floating,
+          behavior: _snackBarBehavior,
         ),
       );
     } catch (error) {
       messenger.showSnackBar(
         SnackBar(
           content: Text('写真ライブラリ保存に失敗しました: $error'),
-          behavior: SnackBarBehavior.floating,
+          behavior: _snackBarBehavior,
         ),
       );
     }
@@ -1018,9 +1044,9 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
+      SnackBar(
         content: Text('保存先パスを設定してください。'),
-        behavior: SnackBarBehavior.floating,
+        behavior: _snackBarBehavior,
       ),
     );
   }
@@ -1067,7 +1093,9 @@ class _EditorScreenState extends State<EditorScreen> {
 
               Widget shell = EditorShell(
                 title: p.basename(widget.inputPath),
-                onCloseRequested: widget.onCloseRequested,
+                onCloseRequested: () {
+                  unawaited(_handleOpenFromFilesFromAppBar());
+                },
                 showDropHighlight: _isDraggingReplace,
                 preview: PreviewStage(
                   video: Video(
@@ -1227,7 +1255,7 @@ class _EditorScreenState extends State<EditorScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
                         DropdownButtonFormField<ExportFormat>(
-                          value: controller.exportFormat,
+                          initialValue: controller.exportFormat,
                           decoration: const InputDecoration(
                             labelText: '書き出し形式',
                           ),
@@ -1271,7 +1299,7 @@ class _EditorScreenState extends State<EditorScreen> {
                         ],
                         const Divider(height: 24),
                         DropdownButtonFormField<GifQualityPreset>(
-                          value: controller.gifQualityPreset,
+                          initialValue: controller.gifQualityPreset,
                           decoration: const InputDecoration(labelText: 'GIF画質'),
                           items: GifQualityPreset.values
                               .map(
@@ -1290,7 +1318,7 @@ class _EditorScreenState extends State<EditorScreen> {
                         ),
                         const SizedBox(height: 12),
                         DropdownButtonFormField<GifFpsPreset>(
-                          value: controller.gifFpsPreset,
+                          initialValue: controller.gifFpsPreset,
                           decoration: const InputDecoration(
                             labelText: 'GIF FPS',
                           ),
@@ -1472,7 +1500,6 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Widget _buildControlPanel(BuildContext context, EditorController controller) {
-    final iosUnsupported = defaultTargetPlatform == TargetPlatform.iOS;
     final exportActionDisabled =
         controller.isExporting ||
         controller.isFrameExporting ||
@@ -1525,7 +1552,7 @@ class _EditorScreenState extends State<EditorScreen> {
                 SizedBox(
                   width: 260,
                   child: OutlinedButton.icon(
-                    onPressed: exportActionDisabled || iosUnsupported
+                    onPressed: exportActionDisabled
                         ? null
                         : () => _exportCurrentFrame(controller),
                     icon: const Icon(Icons.image_rounded),
@@ -1540,7 +1567,7 @@ class _EditorScreenState extends State<EditorScreen> {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: <Widget>[
                     FilledButton.icon(
-                      onPressed: exportActionDisabled || iosUnsupported
+                      onPressed: exportActionDisabled
                           ? null
                           : () => _startExport(controller),
                       icon: const Icon(Icons.movie_creation_rounded),
@@ -1560,13 +1587,6 @@ class _EditorScreenState extends State<EditorScreen> {
             ),
           ),
         ),
-        if (iosUnsupported) ...<Widget>[
-          const SizedBox(height: 6),
-          Text(
-            '\u0069\u004F\u0053\u3067\u306F\u0046\u0046\u006D\u0070\u0065\u0067\u0020\u0043\u004C\u0049\u672A\u5BFE\u5FDC\u306E\u305F\u3081\u3001\u66F8\u304D\u51FA\u3057\u306F\u73FE\u72B6\u7121\u52B9\u3067\u3059\u3002',
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
-          ),
-        ],
         if (controller.isExporting ||
             controller.isFrameExporting ||
             controller.exportProgress > 0) ...<Widget>[

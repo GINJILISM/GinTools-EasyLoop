@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 
 class FileImportService {
@@ -12,6 +13,8 @@ class FileImportService {
     'mkv',
     'webm',
   ];
+
+  final ImagePicker _imagePicker = ImagePicker();
 
   bool isVideoPath(String path) {
     final extension = p.extension(path).replaceFirst('.', '').toLowerCase();
@@ -32,17 +35,24 @@ class FileImportService {
     return null;
   }
 
-  Future<String?> pickVideoFile() async {
+  Future<String?> pickVideoFromFileApp({
+    String dialogTitle = '動画ファイルを選択',
+  }) async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: supportedExtensions,
       allowMultiple: false,
-      dialogTitle: '動画ファイルを選択',
+      dialogTitle: dialogTitle,
     );
 
     if (result == null || result.files.isEmpty) {
       return null;
     }
     return result.files.single.path;
+  }
+
+  Future<String?> pickVideoFromPhotoLibrary() async {
+    final picked = await _imagePicker.pickVideo(source: ImageSource.gallery);
+    return picked?.path;
   }
 }

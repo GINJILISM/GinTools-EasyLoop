@@ -9,6 +9,7 @@ void main() {
     );
 
     expect(find.text('動画をここへドロップ'), findsOneWidget);
-    expect(find.text('動画を選択'), findsOneWidget);
+    expect(find.text('ファイルを開く'), findsOneWidget);
+    expect(find.text('ライブラリを開く'), findsOneWidget);
   });
 }

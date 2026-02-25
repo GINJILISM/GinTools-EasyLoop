@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:ffmpeg_kit_flutter_new_gpl/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new_gpl/ffprobe_kit.dart';
+import 'package:ffmpeg_kit_flutter_new_gpl/return_code.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -21,9 +24,27 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
   final String ffprobeExecutable;
   bool _toolChecked = false;
 
+  bool get _useEmbeddedFfmpegKit {
+    if (kIsWeb) return false;
+    return Platform.isIOS || Platform.isAndroid;
+  }
+
   @override
   Future<Duration> probeDuration(String inputPath) async {
     await _ensureToolsAvailable();
+    final resolvedInputPath = _resolveInputPath(inputPath);
+
+    if (_useEmbeddedFfmpegKit) {
+      final session = await FFprobeKit.getMediaInformation(resolvedInputPath);
+      final mediaInfo = await session.getMediaInformation();
+      final raw = mediaInfo?.getDuration();
+      final seconds = double.tryParse(raw ?? '');
+      if (seconds == null || seconds <= 0) {
+        throw ExportException('動画の長さを取得できませんでした。');
+      }
+      return Duration(milliseconds: (seconds * 1000).round());
+    }
+
     final result = await Process.run(ffprobeExecutable, <String>[
       '-v',
       'error',
@@ -31,7 +52,7 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
       'format=duration',
       '-of',
       'default=noprint_wrappers=1:nokey=1',
-      inputPath,
+      resolvedInputPath,
     ], runInShell: true);
 
     if (result.exitCode != 0) {
@@ -70,6 +91,10 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
     );
     await workDir.create(recursive: true);
     await Directory(p.dirname(request.outputPath)).create(recursive: true);
+    final processingInputPath = await _prepareInputForProcessing(
+      request.inputPath,
+      workDir,
+    );
 
     final forwardClip = p.join(workDir.path, 'forward.mp4');
     final reverseClip = p.join(workDir.path, 'reverse.mp4');
@@ -83,7 +108,7 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
         <String>[
           '-y',
           '-i',
-          request.inputPath,
+          processingInputPath,
           '-ss',
           _formatDurationForFfmpeg(request.trimStart),
           '-to',
@@ -256,13 +281,72 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
     await _ensureToolsAvailable();
     await Directory(p.dirname(request.outputPath)).create(recursive: true);
 
-    await _runFfmpeg(
-      buildFrameJpegArgs(request: request),
-      expectedDurationSeconds: 1,
-      onStepProgress: (_) {},
+    final tempRoot = await getTemporaryDirectory();
+    final workDir = Directory(
+      p.join(
+        tempRoot.path,
+        'frame_export_${DateTime.now().millisecondsSinceEpoch}',
+      ),
+    );
+    await workDir.create(recursive: true);
+
+    final processingInputPath = await _prepareInputForProcessing(
+      request.inputPath,
+      workDir,
     );
 
+    try {
+      await _runFfmpeg(
+        buildFrameJpegArgs(
+          request: FrameExportRequest(
+            inputPath: processingInputPath,
+            outputPath: request.outputPath,
+            position: request.position,
+            qualityPreset: request.qualityPreset,
+          ),
+        ),
+        expectedDurationSeconds: 1,
+        onStepProgress: (_) {},
+      );
+    } finally {
+      if (workDir.existsSync()) {
+        await workDir.delete(recursive: true);
+      }
+    }
+
     return request.outputPath;
+  }
+
+  Future<String> _prepareInputForProcessing(
+    String rawInputPath,
+    Directory workDir,
+  ) async {
+    final resolvedPath = _resolveInputPath(rawInputPath);
+    final inputFile = File(resolvedPath);
+    if (!await inputFile.exists()) {
+      throw ExportException('入力動画が見つかりません: $resolvedPath');
+    }
+
+    if (!_useEmbeddedFfmpegKit) {
+      return resolvedPath;
+    }
+
+    final extension = p.extension(resolvedPath).trim();
+    final stagedPath = p.join(
+      workDir.path,
+      'input${extension.isEmpty ? '' : extension}',
+    );
+
+    if (p.equals(resolvedPath, stagedPath)) {
+      return resolvedPath;
+    }
+
+    try {
+      await inputFile.copy(stagedPath);
+      return stagedPath;
+    } on FileSystemException catch (error) {
+      throw ExportException('入力動画の一時コピーに失敗しました: ${error.message}');
+    }
   }
 
   Future<String> _prepareGifCycle({
@@ -361,7 +445,7 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
     required GifQualityPreset qualityPreset,
   }) {
     final filter =
-        'fps=$fps,${_gifScaleFilter(qualityPreset)},palettegen=stats_mode=diff';
+        'fps=$fps,${_gifScaleFilter(qualityPreset)},palettegen=stats_mode=full';
     return <String>['-y', '-i', inputPath, '-vf', filter, palettePath];
   }
 
@@ -374,16 +458,21 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
     required GifQualityPreset qualityPreset,
   }) {
     final filter =
-        '[0:v]fps=$fps,${_gifScaleFilter(qualityPreset)}[x];'
-        '[x][1:v]paletteuse=dither=sierra2_4a';
+        '[0:v]fps=$fps,${_gifScaleFilter(qualityPreset)}[src];'
+        '[src][1:v]paletteuse=dither=sierra2_4a:diff_mode=rectangle[gif]';
     return <String>[
       '-y',
       '-i',
       inputPath,
       '-i',
       palettePath,
-      '-lavfi',
+      '-filter_complex',
       filter,
+      '-map',
+      '[gif]',
+      '-an',
+      '-f',
+      'gif',
       '-loop',
       '0',
       outputPath,
@@ -405,20 +494,18 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
   List<String> buildFrameJpegArgs({required FrameExportRequest request}) {
     return <String>[
       '-y',
-      '-i',
-      request.inputPath,
       '-ss',
       _formatDurationForFfmpeg(request.position),
+      '-i',
+      request.inputPath,
+      '-map',
+      '0:v:0',
       '-frames:v',
       '1',
       '-q:v',
-      '1',
-      '-qmin',
-      '1',
-      '-qmax',
-      '1',
-      '-pix_fmt',
-      'yuvj444p',
+      '2',
+      '-f',
+      'image2',
       request.outputPath,
     ];
   }
@@ -428,6 +515,25 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
     required double expectedDurationSeconds,
     required void Function(double progress) onStepProgress,
   }) async {
+    if (_useEmbeddedFfmpegKit) {
+      onStepProgress(0);
+      final session = await FFmpegKit.executeWithArguments(args);
+      onStepProgress(1);
+
+      final returnCode = await session.getReturnCode();
+      if (!ReturnCode.isSuccess(returnCode)) {
+        final logs = await session.getAllLogsAsString();
+        final failStackTrace = await session.getFailStackTrace();
+        throw ExportException(
+          'FFmpegの実行に失敗しました。\n'
+          'returnCode=${returnCode?.getValue() ?? 'unknown'}\n'
+          '${_summarizeFfmpegLogs(logs ?? '')}'
+          '${_summarizeFailStackTrace(failStackTrace)}',
+        );
+      }
+      return;
+    }
+
     final process = await Process.start(
       ffmpegExecutable,
       args,
@@ -453,22 +559,102 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
     await Future.wait(<Future<void>>[stderrFuture, stdoutFuture]);
 
     if (exitCode != 0) {
-      final lines = logBuffer
-          .toString()
-          .split('\n')
-          .where((line) => line.trim().isNotEmpty)
-          .toList();
-      final tail = lines.length <= 10
-          ? lines.join('\n')
-          : lines.sublist(lines.length - 10).join('\n');
-      throw ExportException('FFmpegの実行に失敗しました。\n$tail');
+      throw ExportException(
+        'FFmpegの実行に失敗しました。\n${_summarizeFfmpegLogs(logBuffer.toString())}',
+      );
     }
+  }
+
+  String _resolveInputPath(String rawPath) {
+    final trimmed = rawPath.trim();
+    if (trimmed.isEmpty) {
+      throw ExportException('入力動画パスが空です。');
+    }
+
+    final uri = Uri.tryParse(trimmed);
+    if (uri == null) {
+      return trimmed;
+    }
+
+    if (uri.scheme.isEmpty) {
+      return trimmed;
+    }
+
+    if (uri.scheme != 'file') {
+      throw ExportException('未対応の入力パス形式です: $trimmed');
+    }
+
+    try {
+      return uri.toFilePath();
+    } catch (_) {
+      throw ExportException('入力動画パスの解析に失敗しました: $trimmed');
+    }
+  }
+
+  String _summarizeFfmpegLogs(String logs) {
+    final lines = logs
+        .split('\n')
+        .map((line) => line.trimRight())
+        .where((line) => line.trim().isNotEmpty)
+        .toList();
+
+    if (lines.isEmpty) {
+      return '詳細ログを取得できませんでした。';
+    }
+
+    const hints = <String>[
+      'error',
+      'failed',
+      'invalid',
+      'no such file',
+      'permission denied',
+      'operation not permitted',
+      'unknown encoder',
+      'unknown decoder',
+      'unsupported',
+      'unrecognized option',
+      'option not found',
+      'at least one output file must be specified',
+      'could not',
+      'unable to',
+      'not found',
+      'does not contain',
+      'av_interleaved_write_frame',
+    ];
+
+    final matched = lines.where((line) {
+      final lower = line.toLowerCase();
+      return hints.any(lower.contains);
+    }).toList();
+
+    final source = matched.isNotEmpty ? matched : lines;
+    final tail = source.length <= 12
+        ? source
+        : source.sublist(source.length - 12);
+    return tail.join('\n');
+  }
+
+  String _summarizeFailStackTrace(String? failStackTrace) {
+    if (failStackTrace == null) {
+      return '';
+    }
+    final trimmed = failStackTrace.trim();
+    if (trimmed.isEmpty) {
+      return '';
+    }
+    return '\nstack=$trimmed';
   }
 
   Future<void> _ensureToolsAvailable() async {
     if (_toolChecked) {
       return;
     }
+
+    if (_useEmbeddedFfmpegKit) {
+      _toolChecked = true;
+      return;
+    }
+
     try {
       final ffmpeg = await Process.run(ffmpegExecutable, const <String>[
         '-version',

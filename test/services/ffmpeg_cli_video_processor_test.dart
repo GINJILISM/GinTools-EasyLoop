@@ -24,6 +24,8 @@ void main() {
 
       expect(paletteArgs.join(' '), contains('palettegen'));
       expect(renderArgs.join(' '), contains('paletteuse'));
+      expect(renderArgs, contains('-filter_complex'));
+      expect(renderArgs, containsAll(<String>['-map', '[gif]']));
       expect(renderArgs, contains('-loop'));
       expect(renderArgs, contains('0'));
     });
@@ -37,11 +39,8 @@ void main() {
         ),
       );
 
-      expect(
-        args,
-        containsAll(<String>['-q:v', '1', '-qmin', '1', '-qmax', '1']),
-      );
-      expect(args, contains('yuvj444p'));
+      expect(args, containsAll(<String>['-map', '0:v:0', '-frames:v', '1']));
+      expect(args, containsAll(<String>['-q:v', '2', '-f', 'image2']));
       expect(args.last, 'frame.jpg');
     });
   });

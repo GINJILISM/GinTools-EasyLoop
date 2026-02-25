@@ -24,7 +24,6 @@ Windows/macOS を主対象にした GUI ベースのループ動画編集アプ�
 ### 未実装 / 制約（残タスク）
 
 1. iOS Share Extension（共有シート受け取り）
-2. iOS の動画書き出し実装（FFmpeg CLI 依存を再設計）
 3. GIF品質パラメータのUI化（fps / scale / palette戦略）
 4. Windows「右クリック直下の独自メニュー」
 : 現在は「このアプリで開く」配下。直下表示は別途 COM 拡張DLLが必要。
@@ -107,7 +106,7 @@ Windows/macOS を主対象にした GUI ベースのループ動画編集アプ�
 - IPA（配布用）: `flutter build ipa --release`
 
 補足:
-- iOS 書き出しは現状 `FFmpeg CLI` 依存のため、次フェーズで実装再設計が必要です。
+- iOS/Android は `ffmpeg_kit_flutter_new_gpl` による組み込みFFmpeg実行へ切り替え済み（CLIのPATH依存を解消）。
 - Share Extension 追加時は `Runner` とは別ターゲット（Extension）の署名設定も必要になります。
 
 ## iOS開発ドキュメント
@@ -141,12 +140,12 @@ ios/
 - iOS 側ネイティブ（Swift）と Flutter の受け取り導線（MethodChannel）を設計
 - 「本体が起動済み / 未起動」両ケースの遷移仕様を明文化
 
-### 2) iOS の動画書き出し方式を再設計（FFmpeg CLI依存を解消）
+### 2) iOS の動画書き出し方式（実装済み方針）
 
-- 候補比較: `ffmpeg_kit` / ネイティブ `AVFoundation` / ハイブリッド構成
+- 現行: `ffmpeg_kit_flutter_new_gpl` を採用してモバイルPATH依存を解消（将来候補としてAVFoundation併用を評価）
 - 端末性能・発熱・処理時間・バイナリサイズを含む評価軸を先に固定
 - 進捗通知 / キャンセル / エラーハンドリングのAPIを `VideoProcessor` 抽象で統一
-- MP4/GIF/JPG で「機能差を最小化する仕様」を先に決め、段階移行する
+- MP4/GIF/JPG は同一の書き出し手順を維持し、iOS/Androidではffmpeg_kit実行・デスクトップではCLI実行の分岐で機能差を抑える
 
 ### 3) モバイル向けUX・運用整備
 

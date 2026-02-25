@@ -51,27 +51,54 @@ class LaunchFileService {
   }
 
   Future<void> _handleMethodCall(MethodCall call) async {
-    if (call.method != 'onOpenFile') {
+    final method = call.method;
+    if (method != 'onOpenFile' && method != 'onReceiveSharedMedia') {
       return;
     }
 
-    String? rawPath;
-    final args = call.arguments;
+    final paths = _extractIncomingPaths(call.arguments);
+    for (final rawPath in paths) {
+      final file = File(rawPath);
+      if (!_importService.isSupportedVideoFile(file)) {
+        continue;
+      }
+      _openedFileController.add(file.path);
+      break;
+    }
+  }
+
+  List<String> _extractIncomingPaths(dynamic args) {
+    final resolved = <String>[];
+
+    void appendPath(dynamic candidate) {
+      if (candidate is String && candidate.trim().isNotEmpty) {
+        resolved.add(candidate);
+      }
+    }
+
+    if (args is String) {
+      appendPath(args);
+      return resolved;
+    }
+
     if (args is Map) {
-      final value = args['path'];
-      rawPath = value is String ? value : null;
-    } else if (args is String) {
-      rawPath = args;
-    }
-    if (rawPath == null || rawPath.trim().isEmpty) {
-      return;
+      appendPath(args['path']);
+      final rawPaths = args['paths'];
+      if (rawPaths is List) {
+        for (final path in rawPaths) {
+          appendPath(path);
+        }
+      }
+      return resolved;
     }
 
-    final file = File(rawPath);
-    if (!_importService.isSupportedVideoFile(file)) {
-      return;
+    if (args is List) {
+      for (final item in args) {
+        appendPath(item);
+      }
     }
-    _openedFileController.add(file.path);
+
+    return resolved;
   }
 
   @visibleForTesting
