@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 class EditorShell extends StatelessWidget {
@@ -7,7 +10,9 @@ class EditorShell extends StatelessWidget {
     required this.preview,
     required this.timeline,
     required this.controls,
-    required this.onCloseRequested,
+    required this.onImportDefaultRequested,
+    required this.onImportFromFilesRequested,
+    required this.onImportFromLibraryRequested,
     this.showDropHighlight = false,
   });
 
@@ -15,8 +20,48 @@ class EditorShell extends StatelessWidget {
   final Widget preview;
   final Widget timeline;
   final Widget controls;
-  final VoidCallback onCloseRequested;
+  final VoidCallback onImportDefaultRequested;
+  final VoidCallback onImportFromFilesRequested;
+  final VoidCallback onImportFromLibraryRequested;
   final bool showDropHighlight;
+
+  bool get _isMobilePlatform {
+    if (kIsWeb) return false;
+    return Platform.isAndroid || Platform.isIOS;
+  }
+
+  Future<void> _showImportSourceSheet(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text('ライブラリから取り込み'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  onImportFromLibraryRequested();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.folder_open_rounded),
+                title: const Text('ファイルから取り込み'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  onImportFromFilesRequested();
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,28 +102,50 @@ class EditorShell extends StatelessWidget {
       ),
     );
 
-    final titleStyle = Theme.of(
-      context,
-    ).textTheme.titleSmall?.copyWith(fontSize: 12, fontWeight: FontWeight.w500);
+    final titleStyle = Theme.of(context).textTheme.titleSmall?.copyWith(
+      fontSize: 12,
+      fontWeight: FontWeight.w500,
+    );
+    final isMobilePlatform = _isMobilePlatform;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          '\u7de8\u96c6\u4e2d: $title',
-          style: titleStyle,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
+        title: isMobilePlatform
+            ? null
+            : Text(
+                '\u7de8\u96c6\u4e2d: $title',
+                style: titleStyle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
         actions: <Widget>[
-          if (isCompact)
+          if (isMobilePlatform)
+            Row(
+              children: <Widget>[
+                FilledButton.icon(
+                  onPressed: onImportDefaultRequested,
+                  icon: const Icon(Icons.video_library_outlined),
+                  label: const Text('動画を選択'),
+                ),
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: '取り込み元を選択',
+                  onPressed: () {
+                    _showImportSourceSheet(context);
+                  },
+                  icon: const Icon(Icons.arrow_drop_down),
+                ),
+              ],
+            )
+          else if (isCompact)
             IconButton(
               tooltip: '\u52d5\u753b\u3092\u9078\u629e',
-              onPressed: onCloseRequested,
+              onPressed: onImportFromFilesRequested,
               icon: const Icon(Icons.video_library_outlined),
             )
           else
             TextButton.icon(
-              onPressed: onCloseRequested,
+              onPressed: onImportFromFilesRequested,
               icon: const Icon(Icons.video_library_outlined),
               label: const Text('\u52d5\u753b\u3092\u9078\u629e'),
             ),

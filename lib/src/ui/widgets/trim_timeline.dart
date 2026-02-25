@@ -22,6 +22,7 @@ class TrimTimeline extends StatefulWidget {
     this.onScrubUpdate,
     this.onScrubEnd,
     this.onViewportWidthChanged,
+    this.onPinchZoomChanged,
     this.tileBaseWidth = 96,
   });
 
@@ -37,6 +38,7 @@ class TrimTimeline extends StatefulWidget {
   final ValueChanged<double>? onScrubUpdate;
   final ValueChanged<double>? onScrubEnd;
   final ValueChanged<double>? onViewportWidthChanged;
+  final ValueChanged<double>? onPinchZoomChanged;
   final double tileBaseWidth;
 
   @override
@@ -45,6 +47,7 @@ class TrimTimeline extends StatefulWidget {
 
 class _TrimTimelineState extends State<TrimTimeline> {
   final ScrollController _scrollController = ScrollController();
+  final Set<int> _activeTouchPointers = <int>{};
 
   double _lastViewportWidth = -1;
 
@@ -54,6 +57,8 @@ class _TrimTimelineState extends State<TrimTimeline> {
 
   bool _isMiddlePanning = false;
   Offset? _lastMiddlePanGlobal;
+  bool _isTwoFingerGestureActive = false;
+  double _pinchStartZoom = 1.0;
 
   bool _isTouchPanCandidate = false;
   bool _isTouchPanning = false;
@@ -127,6 +132,7 @@ class _TrimTimelineState extends State<TrimTimeline> {
                         behavior: HitTestBehavior.opaque,
                         onTapDown: (details) {
                           if (_isMiddlePanning ||
+                              _isTwoFingerGestureActive ||
                               _isTouchPanning ||
                               _isTouchPanCandidate) {
                             return;
@@ -140,6 +146,7 @@ class _TrimTimelineState extends State<TrimTimeline> {
                         },
                         onHorizontalDragStart: (details) {
                           if (_isMiddlePanning ||
+                              _isTwoFingerGestureActive ||
                               _isTouchPanning ||
                               _isTouchPanCandidate ||
                               _isDraggingHandle ||
@@ -186,6 +193,40 @@ class _TrimTimelineState extends State<TrimTimeline> {
                           }
                           _isScrubbingPlayhead = false;
                           widget.onScrubEnd?.call(_lastScrubSeconds);
+                        },
+                        onScaleStart: (details) {
+                          if (_activeTouchPointers.length < 2) {
+                            return;
+                          }
+                          _isTwoFingerGestureActive = true;
+                          _pinchStartZoom = widget.zoomLevel;
+                        },
+                        onScaleUpdate: (details) {
+                          if (!_isTwoFingerGestureActive ||
+                              _activeTouchPointers.length < 2) {
+                            return;
+                          }
+
+                          final scale = details.scale;
+                          if (widget.onPinchZoomChanged != null &&
+                              scale.isFinite &&
+                              scale > 0) {
+                            final nextZoom = (_pinchStartZoom * scale).clamp(
+                              0.5,
+                              5.0,
+                            );
+                            if ((nextZoom - widget.zoomLevel).abs() > 0.01) {
+                              widget.onPinchZoomChanged?.call(nextZoom);
+                            }
+                          }
+
+                          final slideDx = details.focalPointDelta.dx;
+                          if (slideDx.abs() > 0.01) {
+                            _scrollBy(slideDx);
+                          }
+                        },
+                        onScaleEnd: (_) {
+                          _isTwoFingerGestureActive = false;
                         },
                         child: Stack(
                           key: const Key('trim-timeline-surface'),
@@ -276,10 +317,6 @@ class _TrimTimelineState extends State<TrimTimeline> {
                 ),
               ),
             ),
-            const SizedBox(height: 6),
-            Text(
-              'start ${widget.trimStartSeconds.toStringAsFixed(2)}s  /  end ${widget.trimEndSeconds.toStringAsFixed(2)}s',
-            ),
           ],
         );
       },
@@ -287,6 +324,10 @@ class _TrimTimelineState extends State<TrimTimeline> {
   }
 
   void _handlePointerDown(PointerDownEvent event) {
+    if (event.kind == PointerDeviceKind.touch) {
+      _activeTouchPointers.add(event.pointer);
+    }
+
     if (event.kind == PointerDeviceKind.mouse &&
         (event.buttons & kMiddleMouseButton) != 0) {
       _isMiddlePanning = true;
@@ -335,6 +376,13 @@ class _TrimTimelineState extends State<TrimTimeline> {
   }
 
   void _handlePointerUp(PointerUpEvent event) {
+    if (event.kind == PointerDeviceKind.touch) {
+      _activeTouchPointers.remove(event.pointer);
+      if (_activeTouchPointers.length < 2) {
+        _isTwoFingerGestureActive = false;
+      }
+    }
+
     if (event.kind == PointerDeviceKind.mouse) {
       _isMiddlePanning = false;
       _lastMiddlePanGlobal = null;
@@ -355,6 +403,13 @@ class _TrimTimelineState extends State<TrimTimeline> {
   }
 
   void _handlePointerCancel(PointerCancelEvent event) {
+    if (event.kind == PointerDeviceKind.touch) {
+      _activeTouchPointers.remove(event.pointer);
+      if (_activeTouchPointers.length < 2) {
+        _isTwoFingerGestureActive = false;
+      }
+    }
+
     if (event.kind == PointerDeviceKind.mouse) {
       _isMiddlePanning = false;
       _lastMiddlePanGlobal = null;

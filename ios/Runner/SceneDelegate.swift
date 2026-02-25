@@ -10,7 +10,7 @@ class SceneDelegate: FlutterSceneDelegate {
 
     let paths = URLContexts
       .map { $0.url }
-      .compactMap { SharedMediaBridge.normalizeIncomingUrl($0)?.path }
+      .compactMap { SharedMediaBridge.materializeIncomingUrl($0)?.path }
 
     SharedMediaBridge.post(paths: paths)
   }

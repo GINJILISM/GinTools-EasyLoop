@@ -14,6 +14,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/export_format.dart';
 import '../../models/gif_export_options.dart';
@@ -123,13 +124,10 @@ class _EditorScreenState extends State<EditorScreen> {
   String? _gifExportDirectory;
   String _outputNameTemplate = OutputFileNamingService.defaultTemplate;
   bool _saveToPhotoLibrary = true;
+  bool _lastVideoExportToPhotoLibrary = false;
+  bool _lastFrameExportToPhotoLibrary = false;
 
   bool get _supportsDesktopDrop {
-    if (kIsWeb) return false;
-    return Platform.isWindows || Platform.isMacOS || Platform.isLinux;
-  }
-
-  bool get _isDesktopPlatform {
     if (kIsWeb) return false;
     return Platform.isWindows || Platform.isMacOS || Platform.isLinux;
   }
@@ -201,7 +199,7 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
 
-  Future<void> _handleOpenFromFilesFromAppBar() async {
+  Future<void> _handleOpenFromAppBar({required bool fromLibrary}) async {
     if (_editorController.isExporting || _editorController.isFrameExporting) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -210,6 +208,11 @@ class _EditorScreenState extends State<EditorScreen> {
           behavior: _snackBarBehavior,
         ),
       );
+      return;
+    }
+
+    if (fromLibrary) {
+      await widget.onRequestOpenFromLibrary();
       return;
     }
 
@@ -831,6 +834,8 @@ class _EditorScreenState extends State<EditorScreen> {
     final outputPath = await _resolveVideoOutputPath(controller.exportFormat);
     if (outputPath == null) return;
 
+    _lastVideoExportToPhotoLibrary = false;
+
     final success = await controller.export(
       inputPath: widget.inputPath,
       outputPath: outputPath,
@@ -842,11 +847,15 @@ class _EditorScreenState extends State<EditorScreen> {
     if (success) {
       final exportedPath = controller.lastOutputPath;
       if (isMobilePhotoLibrary && exportedPath != null) {
-        await _storeExportToGallery(
+        final saved = await _storeExportToGallery(
           exportedPath,
           controller.exportFormat.label,
         );
+        _lastVideoExportToPhotoLibrary = saved;
+        if (mounted) setState(() {});
       } else {
+        _lastVideoExportToPhotoLibrary = false;
+        if (mounted) setState(() {});
         messenger.showSnackBar(
           SnackBar(
             content: Text('書き出しが完了しました。'),
@@ -870,6 +879,8 @@ class _EditorScreenState extends State<EditorScreen> {
     if (outputPath == null) {
       return;
     }
+
+    _lastFrameExportToPhotoLibrary = false;
 
     final success = await controller.exportCurrentFrameJpeg(
       inputPath: widget.inputPath,
@@ -898,9 +909,14 @@ class _EditorScreenState extends State<EditorScreen> {
     }
 
     if (isMobilePhotoLibrary) {
-      await _storeFrameToGallery(framePath);
+      final saved = await _storeFrameToGallery(framePath);
+      _lastFrameExportToPhotoLibrary = saved;
+      if (mounted) setState(() {});
       return;
     }
+
+    _lastFrameExportToPhotoLibrary = false;
+    if (mounted) setState(() {});
 
     messenger.showSnackBar(
       SnackBar(
@@ -910,8 +926,8 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
-  Future<void> _storeFrameToGallery(String imagePath) async {
-    if (!mounted) return;
+  Future<bool> _storeFrameToGallery(String imagePath) async {
+    if (!mounted) return false;
 
     final messenger = ScaffoldMessenger.of(context);
     try {
@@ -926,14 +942,8 @@ class _EditorScreenState extends State<EditorScreen> {
       if (!isSuccess) {
         throw Exception('保存に失敗しました。');
       }
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            '\u30D5\u30EC\u30FC\u30E0\u753B\u50CF\u3092\u30D5\u30A9\u30C8\u30E9\u30A4\u30D6\u30E9\u30EA\u306B\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002',
-          ),
-          behavior: _snackBarBehavior,
-        ),
-      );
+      messenger.showSnackBar(_buildPhotoLibrarySavedSnackBar('フレーム画像をフォトライブラリに保存しました。'));
+      return true;
     } catch (error) {
       messenger.showSnackBar(
         SnackBar(
@@ -943,14 +953,15 @@ class _EditorScreenState extends State<EditorScreen> {
           behavior: _snackBarBehavior,
         ),
       );
+      return false;
     }
   }
 
-  Future<void> _storeExportToGallery(
+  Future<bool> _storeExportToGallery(
     String filePath,
     String formatLabel,
   ) async {
-    if (!mounted) return;
+    if (!mounted) return false;
 
     final messenger = ScaffoldMessenger.of(context);
     try {
@@ -966,11 +977,9 @@ class _EditorScreenState extends State<EditorScreen> {
         throw Exception('保存に失敗しました。');
       }
       messenger.showSnackBar(
-        SnackBar(
-          content: Text('$formatLabel を写真ライブラリに保存しました。'),
-          behavior: _snackBarBehavior,
-        ),
+        _buildPhotoLibrarySavedSnackBar('$formatLabel を写真ライブラリに保存しました。'),
       );
+      return true;
     } catch (error) {
       messenger.showSnackBar(
         SnackBar(
@@ -978,7 +987,73 @@ class _EditorScreenState extends State<EditorScreen> {
           behavior: _snackBarBehavior,
         ),
       );
+      return false;
     }
+  }
+
+  SnackBar _buildPhotoLibrarySavedSnackBar(String message) {
+    return SnackBar(
+      behavior: _snackBarBehavior,
+      content: Row(
+        children: <Widget>[
+          Expanded(child: Text(message)),
+          IconButton(
+            tooltip: '保存先を開く',
+            onPressed: () {
+              unawaited(_openPhotoLibrary());
+            },
+            icon: const Icon(Icons.folder_open_rounded),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openLastOutputDestination(EditorController controller) async {
+    final outputPath = controller.lastOutputPath;
+    if (outputPath == null) {
+      return;
+    }
+
+    if (_lastVideoExportToPhotoLibrary) {
+      await _openPhotoLibrary();
+      return;
+    }
+
+    await OpenFilex.open(outputPath);
+  }
+
+  Future<void> _openLastFrameDestination(EditorController controller) async {
+    final framePath = controller.lastFrameOutputPath;
+    if (framePath == null) {
+      return;
+    }
+
+    if (_lastFrameExportToPhotoLibrary) {
+      await _openPhotoLibrary();
+      return;
+    }
+
+    await OpenFilex.open(framePath);
+  }
+
+  Future<void> _openPhotoLibrary() async {
+    if (!_isMobilePlatform || kIsWeb || !Platform.isIOS) {
+      return;
+    }
+
+    final photosUri = Uri.parse('photos-redirect://');
+    if (!await canLaunchUrl(photosUri)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('写真ライブラリアプリを開けませんでした。'),
+          behavior: _snackBarBehavior,
+        ),
+      );
+      return;
+    }
+    await launchUrl(photosUri, mode: LaunchMode.externalApplication);
   }
 
   Future<String?> _resolveVideoOutputPath(ExportFormat format) async {
@@ -1088,13 +1163,19 @@ class _EditorScreenState extends State<EditorScreen> {
               final playheadDuration = Duration(
                 milliseconds: (playheadSeconds * 1000).round(),
               );
-              final trimSummary =
-                  'start ${controller.trimStartSeconds.toStringAsFixed(2)}s / end ${controller.trimEndSeconds.toStringAsFixed(2)}s';
 
               Widget shell = EditorShell(
                 title: p.basename(widget.inputPath),
-                onCloseRequested: () {
-                  unawaited(_handleOpenFromFilesFromAppBar());
+                onImportDefaultRequested: () {
+                  unawaited(
+                    _handleOpenFromAppBar(fromLibrary: _isMobilePlatform),
+                  );
+                },
+                onImportFromFilesRequested: () {
+                  unawaited(_handleOpenFromAppBar(fromLibrary: false));
+                },
+                onImportFromLibraryRequested: () {
+                  unawaited(_handleOpenFromAppBar(fromLibrary: true));
                 },
                 showDropHighlight: _isDraggingReplace,
                 preview: PreviewStage(
@@ -1102,8 +1183,7 @@ class _EditorScreenState extends State<EditorScreen> {
                     controller: _videoController,
                     controls: NoVideoControls,
                   ),
-                  positionLabel:
-                      '${_formatDuration(playheadDuration)}  ($trimSummary)',
+                  positionLabel: _formatDuration(playheadDuration),
                   isPingPong: controller.loopMode == LoopMode.pingPong,
                   isReverseDirection: _isReverseDirection,
                   bottomOverlay: PlaybackTransportBar(
@@ -1175,6 +1255,12 @@ class _EditorScreenState extends State<EditorScreen> {
                             : (seconds) {
                                 unawaited(_handleScrubEnd(seconds));
                               },
+                        onPinchZoomChanged: controller.isExporting
+                            ? null
+                            : (zoomLevel) {
+                                controller.setZoomLevel(zoomLevel);
+                                _scheduleThumbnailBuild(force: false);
+                              },
                         onTrimChanged: (start, end) {
                           controller.setTrimRange(
                             startSeconds: start,
@@ -1191,12 +1277,18 @@ class _EditorScreenState extends State<EditorScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    TimelineZoomBar(
-                      zoomLevel: controller.zoomLevel,
-                      onChanged: controller.isExporting
-                          ? null
-                          : (value) => controller.setZoomLevel(value),
-                    ),
+                    if (_isMobilePlatform)
+                      Text(
+                        'タイムライン: 2本指ピンチで倍率変更 / 2本指スライドで左右移動',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      )
+                    else
+                      TimelineZoomBar(
+                        zoomLevel: controller.zoomLevel,
+                        onChanged: controller.isExporting
+                            ? null
+                            : (value) => controller.setZoomLevel(value),
+                      ),
                   ],
                 ),
                 controls: _buildControlPanel(context, controller),
@@ -1504,6 +1596,7 @@ class _EditorScreenState extends State<EditorScreen> {
         controller.isExporting ||
         controller.isFrameExporting ||
         controller.totalDuration <= Duration.zero;
+    final isMobile = _isMobilePlatform;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1514,6 +1607,12 @@ class _EditorScreenState extends State<EditorScreen> {
           crossAxisAlignment: WrapCrossAlignment.center,
           children: <Widget>[
             SegmentedButton<LoopMode>(
+              style: isMobile
+                  ? const ButtonStyle(
+                      visualDensity: VisualDensity.compact,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    )
+                  : null,
               segments: LoopMode.values
                   .map(
                     (mode) => ButtonSegment<LoopMode>(
@@ -1533,6 +1632,9 @@ class _EditorScreenState extends State<EditorScreen> {
                 const Text('\u7BC4\u56F2\u30EB\u30FC\u30D7'),
                 Switch(
                   value: controller.isAutoLoopEnabled,
+                  materialTapTargetSize: isMobile
+                      ? MaterialTapTargetSize.shrinkWrap
+                      : MaterialTapTargetSize.padded,
                   onChanged: exportActionDisabled
                       ? null
                       : controller.setAutoLoopEnabled,
@@ -1542,50 +1644,50 @@ class _EditorScreenState extends State<EditorScreen> {
           ],
         ),
         const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerRight,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: <Widget>[
-                SizedBox(
-                  width: 260,
-                  child: OutlinedButton.icon(
-                    onPressed: exportActionDisabled
-                        ? null
-                        : () => _exportCurrentFrame(controller),
-                    icon: const Icon(Icons.image_rounded),
-                    label: const Text(
-                      '\u3053\u306E\u30D5\u30EC\u30FC\u30E0\u3092\u753B\u50CF\u66F8\u304D\u51FA\u3057',
-                    ),
-                  ),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: OutlinedButton.icon(
+                style: isMobile
+                    ? const ButtonStyle(
+                        visualDensity: VisualDensity.compact,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      )
+                    : null,
+                onPressed: exportActionDisabled
+                    ? null
+                    : () => _exportCurrentFrame(controller),
+                icon: const Icon(Icons.image_rounded),
+                label: Text(
+                  isMobile ? 'フレーム書き出し' : 'このフレームを画像書き出し',
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: <Widget>[
-                    FilledButton.icon(
-                      onPressed: exportActionDisabled
-                          ? null
-                          : () => _startExport(controller),
-                      icon: const Icon(Icons.movie_creation_rounded),
-                      label: const Text('書き出し'),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      tooltip: '書き出し設定',
-                      onPressed: exportActionDisabled
-                          ? null
-                          : () => _showExportSettingsModal(controller),
-                      icon: const Icon(Icons.settings),
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ),
-          ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: FilledButton.icon(
+                style: isMobile
+                    ? const ButtonStyle(
+                        visualDensity: VisualDensity.compact,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      )
+                    : null,
+                onPressed: exportActionDisabled
+                    ? null
+                    : () => _startExport(controller),
+                icon: const Icon(Icons.movie_creation_rounded),
+                label: const Text('書き出し'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              tooltip: '書き出し設定',
+              onPressed: exportActionDisabled
+                  ? null
+                  : () => _showExportSettingsModal(controller),
+              icon: const Icon(Icons.settings),
+            ),
+          ],
         ),
         if (controller.isExporting ||
             controller.isFrameExporting ||
@@ -1606,14 +1708,18 @@ class _EditorScreenState extends State<EditorScreen> {
         if (controller.lastOutputPath != null) ...<Widget>[
           const SizedBox(height: 8),
           Text(
-            '\u51FA\u529B\u5148: ${controller.lastOutputPath}',
+            _lastVideoExportToPhotoLibrary
+                ? '出力先: 写真ライブラリ'
+                : '\u51FA\u529B\u5148: ${controller.lastOutputPath}',
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
           Align(
             alignment: Alignment.centerLeft,
             child: OutlinedButton.icon(
-              onPressed: () => OpenFilex.open(controller.lastOutputPath!),
+              onPressed: () {
+                unawaited(_openLastOutputDestination(controller));
+              },
               icon: const Icon(Icons.folder_open_rounded),
               label: const Text('\u4FDD\u5B58\u5148\u3092\u958B\u304F'),
             ),
@@ -1622,20 +1728,22 @@ class _EditorScreenState extends State<EditorScreen> {
         if (controller.lastFrameOutputPath != null) ...<Widget>[
           const SizedBox(height: 8),
           Text(
-            '\u753B\u50CF\u51FA\u529B\u5148: ${controller.lastFrameOutputPath}',
+            _lastFrameExportToPhotoLibrary
+                ? '画像出力先: 写真ライブラリ'
+                : '\u753B\u50CF\u51FA\u529B\u5148: ${controller.lastFrameOutputPath}',
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
-          if (_isDesktopPlatform)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: OutlinedButton.icon(
-                onPressed: () =>
-                    OpenFilex.open(controller.lastFrameOutputPath!),
-                icon: const Icon(Icons.image_search_rounded),
-                label: const Text('\u753B\u50CF\u3092\u958B\u304F'),
-              ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                unawaited(_openLastFrameDestination(controller));
+              },
+              icon: const Icon(Icons.image_search_rounded),
+              label: const Text('\u4FDD\u5B58\u5148\u3092\u958B\u304F'),
             ),
+          ),
         ],
         if (controller.errorMessage != null) ...<Widget>[
           const SizedBox(height: 6),

@@ -31,19 +31,44 @@ enum SharedMediaBridge {
     }
   }
 
-  static func normalizeIncomingUrl(_ url: URL) -> URL? {
-    if url.isFileURL {
-      return url
+  static func materializeIncomingUrl(_ url: URL) -> URL? {
+    let wasAccessed = url.startAccessingSecurityScopedResource()
+    defer {
+      if wasAccessed {
+        url.stopAccessingSecurityScopedResource()
+      }
     }
 
-    guard url.startAccessingSecurityScopedResource() else {
+    guard url.isFileURL else {
       return nil
     }
-    defer {
-      url.stopAccessingSecurityScopedResource()
-    }
 
-    return url
+    let fileManager = FileManager.default
+    let inboxRoot = fileManager.temporaryDirectory
+      .appendingPathComponent("easyloop_inbox", isDirectory: true)
+
+    do {
+      try fileManager.createDirectory(
+        at: inboxRoot,
+        withIntermediateDirectories: true
+      )
+
+      let ext = url.pathExtension
+      let baseName = url.deletingPathExtension().lastPathComponent
+      let safeBase = baseName.isEmpty ? "shared_video" : baseName
+      let filename = ext.isEmpty
+        ? "\(UUID().uuidString)_\(safeBase)"
+        : "\(UUID().uuidString)_\(safeBase).\(ext)"
+      let destination = inboxRoot.appendingPathComponent(filename)
+
+      if fileManager.fileExists(atPath: destination.path) {
+        try fileManager.removeItem(at: destination)
+      }
+      try fileManager.copyItem(at: url, to: destination)
+      return destination
+    } catch {
+      return nil
+    }
   }
 }
 
@@ -73,8 +98,8 @@ private extension Notification.Name {
     open url: URL,
     options: [UIApplication.OpenURLOptionsKey: Any] = [:]
   ) -> Bool {
-    if let normalized = SharedMediaBridge.normalizeIncomingUrl(url) {
-      SharedMediaBridge.post(path: normalized.path)
+    if let materialized = SharedMediaBridge.materializeIncomingUrl(url) {
+      SharedMediaBridge.post(path: materialized.path)
       return true
     }
     return super.application(app, open: url, options: options)
