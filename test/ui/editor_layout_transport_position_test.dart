@@ -10,7 +10,7 @@ void main() {
       MaterialApp(
         home: EditorShell(
           title: 'sample.mp4',
-          onOpenSourceSelected: (_) {},
+          onCloseRequested: () {},
           preview: PreviewStage(
             video: const ColoredBox(color: Colors.black),
             positionLabel: '00:01 (start 0.00s / end 5.00s)',

@@ -1,7 +1,7 @@
 import Flutter
 import UIKit
 
-private enum SharedMediaBridge {
+enum SharedMediaBridge {
   static let channelName = "com.gintoolflutter.launch/open_file"
 
   static func post(path: String) {
@@ -52,7 +52,7 @@ private extension Notification.Name {
 }
 
 @main
-@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
+@objc class AppDelegate: FlutterAppDelegate {
   private var launchChannel: FlutterMethodChannel?
   private var pendingPayloads: [[String: Any]] = []
   private var incomingObserver: NSObjectProtocol?
@@ -62,6 +62,8 @@ private extension Notification.Name {
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     let didFinish = super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    GeneratedPluginRegistrant.register(with: self)
+    configureLaunchChannelIfNeeded()
     registerIncomingObserver()
     return didFinish
   }
@@ -76,17 +78,6 @@ private extension Notification.Name {
       return true
     }
     return super.application(app, open: url, options: options)
-  }
-
-  func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
-    GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
-
-    let channel = FlutterMethodChannel(
-      name: SharedMediaBridge.channelName,
-      binaryMessenger: engineBridge.binaryMessenger
-    )
-    launchChannel = channel
-    flushPendingPayloadsIfNeeded()
   }
 
   deinit {
@@ -112,7 +103,21 @@ private extension Notification.Name {
 
   private func enqueue(payload: [String: Any]) {
     pendingPayloads.append(payload)
+    configureLaunchChannelIfNeeded()
     flushPendingPayloadsIfNeeded()
+  }
+
+  private func configureLaunchChannelIfNeeded() {
+    guard launchChannel == nil else {
+      return
+    }
+    guard let controller = window?.rootViewController as? FlutterViewController else {
+      return
+    }
+    launchChannel = FlutterMethodChannel(
+      name: SharedMediaBridge.channelName,
+      binaryMessenger: controller.binaryMessenger
+    )
   }
 
   private func flushPendingPayloadsIfNeeded() {

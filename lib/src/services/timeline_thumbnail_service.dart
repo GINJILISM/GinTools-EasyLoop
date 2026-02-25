@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:ffmpeg_kit_flutter_new_gpl/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new_gpl/return_code.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -12,6 +14,11 @@ class TimelineThumbnailService {
   TimelineThumbnailService({this.ffmpegExecutable = 'ffmpeg'});
 
   final String ffmpegExecutable;
+
+  bool get _useEmbeddedFfmpegKit {
+    if (kIsWeb) return false;
+    return Platform.isIOS || Platform.isAndroid;
+  }
 
   Future<List<TimelineThumbnail>> buildStrip({
     required String inputPath,
@@ -68,7 +75,7 @@ class TimelineThumbnailService {
         'thumb_${i.toString().padLeft(3, '0')}.jpg',
       );
 
-      final result = await Process.run(ffmpegExecutable, <String>[
+      final args = <String>[
         '-y',
         '-ss',
         start.toStringAsFixed(3),
@@ -81,9 +88,11 @@ class TimelineThumbnailService {
         '-q:v',
         '18',
         outputPath,
-      ], runInShell: true);
+      ];
 
-      if (result.exitCode == 0 && File(outputPath).existsSync()) {
+      final succeeded = await _runThumbnailCommand(args);
+
+      if (succeeded && File(outputPath).existsSync()) {
         thumbnails.add(
           TimelineThumbnail(
             path: outputPath,
@@ -99,6 +108,21 @@ class TimelineThumbnailService {
     );
 
     return thumbnails;
+  }
+
+  Future<bool> _runThumbnailCommand(List<String> args) async {
+    if (_useEmbeddedFfmpegKit) {
+      final session = await FFmpegKit.executeWithArgumentsAsync(args);
+      final returnCode = await session.getReturnCode();
+      return ReturnCode.isSuccess(returnCode);
+    }
+
+    final result = await Process.run(
+      ffmpegExecutable,
+      args,
+      runInShell: true,
+    );
+    return result.exitCode == 0;
   }
 
   @visibleForTesting

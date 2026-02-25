@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-enum EditorOpenSource { filesApp, photoLibrary }
-
 class EditorShell extends StatelessWidget {
   const EditorShell({
     super.key,
@@ -9,7 +7,7 @@ class EditorShell extends StatelessWidget {
     required this.preview,
     required this.timeline,
     required this.controls,
-    required this.onOpenSourceSelected,
+    required this.onCloseRequested,
     this.showDropHighlight = false,
   });
 
@@ -17,7 +15,7 @@ class EditorShell extends StatelessWidget {
   final Widget preview;
   final Widget timeline;
   final Widget controls;
-  final ValueChanged<EditorOpenSource> onOpenSourceSelected;
+  final VoidCallback onCloseRequested;
   final bool showDropHighlight;
 
   @override
@@ -72,43 +70,18 @@ class EditorShell extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         ),
         actions: <Widget>[
-          PopupMenuButton<EditorOpenSource>(
-            tooltip: '\u52d5\u753b\u3092\u958B\u304F',
-            onSelected: onOpenSourceSelected,
-            itemBuilder: (context) => const <PopupMenuEntry<EditorOpenSource>>[
-              PopupMenuItem<EditorOpenSource>(
-                value: EditorOpenSource.filesApp,
-                child: ListTile(
-                  leading: Icon(Icons.folder_open_rounded),
-                  title: Text('\u30D5\u30A1\u30A4\u30EB\u30A2\u30D7\u30EA\u304B\u3089\u958B\u304F'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              PopupMenuItem<EditorOpenSource>(
-                value: EditorOpenSource.photoLibrary,
-                child: ListTile(
-                  leading: Icon(Icons.photo_library_outlined),
-                  title: Text('\u5199\u771F\u30E9\u30A4\u30D6\u30E9\u30EA\u304B\u3089\u958B\u304F'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-            ],
-            child: isCompact
-                ? const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 12),
-                    child: Icon(Icons.video_library_outlined),
-                  )
-                : const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 12),
-                    child: Row(
-                      children: <Widget>[
-                        Icon(Icons.video_library_outlined),
-                        SizedBox(width: 6),
-                        Text('\u52d5\u753b\u3092\u958B\u304F'),
-                      ],
-                    ),
-                  ),
-          ),
+          if (isCompact)
+            IconButton(
+              tooltip: '\u52d5\u753b\u3092\u9078\u629e',
+              onPressed: onCloseRequested,
+              icon: const Icon(Icons.video_library_outlined),
+            )
+          else
+            TextButton.icon(
+              onPressed: onCloseRequested,
+              icon: const Icon(Icons.video_library_outlined),
+              label: const Text('\u52d5\u753b\u3092\u9078\u629e'),
+            ),
           const SizedBox(width: 10),
         ],
       ),
