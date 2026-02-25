@@ -27,7 +27,14 @@ class _ImportScreenState extends State<ImportScreen> {
   }
 
   Future<void> _pickFile() async {
-    final path = await _fileImportService.pickVideoFile();
+    final path = await _fileImportService.pickVideoFromFileApp(
+      dialogTitle: 'ファイルアプリから動画を選択',
+    );
+    await _handlePickedPath(path);
+  }
+
+  Future<void> _openLibrary() async {
+    final path = await _fileImportService.pickVideoFromPhotoLibrary();
     await _handlePickedPath(path);
   }
 
@@ -75,14 +82,26 @@ class _ImportScreenState extends State<ImportScreen> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'または「動画を選択」から開くと、すぐにトリミング編集画面へ移動します。',
+            '「ファイルを開く」はファイルアプリから、\n「ライブラリを開く」は写真ライブラリ内の動画を選択します。',
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 18),
-          FilledButton.icon(
-            onPressed: _pickFile,
-            icon: const Icon(Icons.upload_file_rounded),
-            label: const Text('動画を選択'),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            alignment: WrapAlignment.center,
+            children: <Widget>[
+              FilledButton.icon(
+                onPressed: _pickFile,
+                icon: const Icon(Icons.upload_file_rounded),
+                label: const Text('ファイルを開く'),
+              ),
+              OutlinedButton.icon(
+                onPressed: _openLibrary,
+                icon: const Icon(Icons.photo_library_outlined),
+                label: const Text('ライブラリを開く'),
+              ),
+            ],
           ),
           if (_errorMessage != null) ...<Widget>[
             const SizedBox(height: 12),

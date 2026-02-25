@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:ffmpeg_kit_flutter_new_gpl/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new_gpl/ffprobe_kit.dart';
+import 'package:ffmpeg_kit_flutter_new_gpl/return_code.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -21,9 +24,26 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
   final String ffprobeExecutable;
   bool _toolChecked = false;
 
+  bool get _useEmbeddedFfmpegKit {
+    if (kIsWeb) return false;
+    return Platform.isIOS || Platform.isAndroid;
+  }
+
   @override
   Future<Duration> probeDuration(String inputPath) async {
     await _ensureToolsAvailable();
+
+    if (_useEmbeddedFfmpegKit) {
+      final session = await FFprobeKit.getMediaInformation(inputPath);
+      final mediaInfo = await session.getMediaInformation();
+      final raw = mediaInfo?.getDuration();
+      final seconds = double.tryParse(raw ?? '');
+      if (seconds == null || seconds <= 0) {
+        throw ExportException('動画の長さを取得できませんでした。');
+      }
+      return Duration(milliseconds: (seconds * 1000).round());
+    }
+
     final result = await Process.run(ffprobeExecutable, <String>[
       '-v',
       'error',
@@ -428,6 +448,36 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
     required double expectedDurationSeconds,
     required void Function(double progress) onStepProgress,
   }) async {
+    if (_useEmbeddedFfmpegKit) {
+      final command = args.map(_quoteShellArg).join(' ');
+      final session = await FFmpegKit.executeAsync(
+        command,
+        (_) {},
+        (_) {},
+        (statistics) {
+          final timeMs = statistics.getTime();
+          if (timeMs == null || expectedDurationSeconds <= 0) {
+            return;
+          }
+          onStepProgress(((timeMs / 1000) / expectedDurationSeconds).clamp(0, 1).toDouble());
+        },
+      );
+
+      final returnCode = await session.getReturnCode();
+      if (!ReturnCode.isSuccess(returnCode)) {
+        final logs = await session.getAllLogsAsString();
+        final lines = logs
+            .split('\n')
+            .where((line) => line.trim().isNotEmpty)
+            .toList();
+        final tail = lines.length <= 10
+            ? lines.join('\n')
+            : lines.sublist(lines.length - 10).join('\n');
+        throw ExportException('FFmpegの実行に失敗しました。\n$tail');
+      }
+      return;
+    }
+
     final process = await Process.start(
       ffmpegExecutable,
       args,
@@ -469,6 +519,12 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
     if (_toolChecked) {
       return;
     }
+
+    if (_useEmbeddedFfmpegKit) {
+      _toolChecked = true;
+      return;
+    }
+
     try {
       final ffmpeg = await Process.run(ffmpegExecutable, const <String>[
         '-version',

@@ -35,13 +35,15 @@ class EditorScreen extends StatefulWidget {
   const EditorScreen({
     super.key,
     required this.inputPath,
-    required this.onCloseRequested,
+    required this.onRequestOpenFromFiles,
+    required this.onRequestOpenFromLibrary,
     required this.onReplaceInputPath,
     this.pickDirectoryOverride,
   });
 
   final String inputPath;
-  final VoidCallback onCloseRequested;
+  final Future<void> Function() onRequestOpenFromFiles;
+  final Future<void> Function() onRequestOpenFromLibrary;
   final ValueChanged<String> onReplaceInputPath;
   final Future<String?> Function(String dialogTitle)? pickDirectoryOverride;
 
@@ -193,6 +195,29 @@ class _EditorScreenState extends State<EditorScreen> {
         await _restartForwardLoop(trimStart);
       }
     });
+  }
+
+
+  Future<void> _handleOpenSourceFromAppBar(EditorOpenSource source) async {
+    if (_editorController.isExporting || _editorController.isFrameExporting) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('書き出し中は入力動画を切り替えできません。'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    switch (source) {
+      case EditorOpenSource.filesApp:
+        await widget.onRequestOpenFromFiles();
+        return;
+      case EditorOpenSource.photoLibrary:
+        await widget.onRequestOpenFromLibrary();
+        return;
+    }
   }
 
   Future<void> _initialize() async {
@@ -1067,7 +1092,9 @@ class _EditorScreenState extends State<EditorScreen> {
 
               Widget shell = EditorShell(
                 title: p.basename(widget.inputPath),
-                onCloseRequested: widget.onCloseRequested,
+                onOpenSourceSelected: (source) {
+                  unawaited(_handleOpenSourceFromAppBar(source));
+                },
                 showDropHighlight: _isDraggingReplace,
                 preview: PreviewStage(
                   video: Video(
@@ -1472,7 +1499,6 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Widget _buildControlPanel(BuildContext context, EditorController controller) {
-    final iosUnsupported = defaultTargetPlatform == TargetPlatform.iOS;
     final exportActionDisabled =
         controller.isExporting ||
         controller.isFrameExporting ||
@@ -1525,7 +1551,7 @@ class _EditorScreenState extends State<EditorScreen> {
                 SizedBox(
                   width: 260,
                   child: OutlinedButton.icon(
-                    onPressed: exportActionDisabled || iosUnsupported
+                    onPressed: exportActionDisabled
                         ? null
                         : () => _exportCurrentFrame(controller),
                     icon: const Icon(Icons.image_rounded),
@@ -1540,7 +1566,7 @@ class _EditorScreenState extends State<EditorScreen> {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: <Widget>[
                     FilledButton.icon(
-                      onPressed: exportActionDisabled || iosUnsupported
+                      onPressed: exportActionDisabled
                           ? null
                           : () => _startExport(controller),
                       icon: const Icon(Icons.movie_creation_rounded),
@@ -1560,13 +1586,6 @@ class _EditorScreenState extends State<EditorScreen> {
             ),
           ),
         ),
-        if (iosUnsupported) ...<Widget>[
-          const SizedBox(height: 6),
-          Text(
-            '\u0069\u004F\u0053\u3067\u306F\u0046\u0046\u006D\u0070\u0065\u0067\u0020\u0043\u004C\u0049\u672A\u5BFE\u5FDC\u306E\u305F\u3081\u3001\u66F8\u304D\u51FA\u3057\u306F\u73FE\u72B6\u7121\u52B9\u3067\u3059\u3002',
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
-          ),
-        ],
         if (controller.isExporting ||
             controller.isFrameExporting ||
             controller.exportProgress > 0) ...<Widget>[

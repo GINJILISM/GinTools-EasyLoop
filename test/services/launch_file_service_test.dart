@@ -22,6 +22,27 @@ void main() {
     await file.delete();
   });
 
+
+  test('共有シート想定の複数パス受信でも最初の動画を通知できる', () async {
+    final invalid = File('${Directory.systemTemp.path}/launch_file_stream_test.txt');
+    final valid = File('${Directory.systemTemp.path}/launch_file_share_test.mov');
+    await invalid.writeAsString('x');
+    await valid.writeAsString('x');
+
+    final service = LaunchFileService(startupArgs: const <String>[]);
+    await service.initialize();
+
+    final future = service.watchOpenedFiles().first;
+    await service.handleIncomingPathForTest(invalid.path);
+    await service.handleIncomingPathForTest(valid.path);
+
+    expect(await future, valid.path);
+
+    await service.dispose();
+    await invalid.delete();
+    await valid.delete();
+  });
+
   test('ランタイム受信でストリーム通知される', () async {
     final file = File(
       '${Directory.systemTemp.path}/launch_file_stream_test.mp4',

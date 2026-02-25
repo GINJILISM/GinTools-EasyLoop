@@ -18,7 +18,7 @@ class LoopEditorApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFF112F48),
         useMaterial3: true,
       ),
-      home: const RootScreen(),
+      home: RootScreen(),
     );
   }
 }
