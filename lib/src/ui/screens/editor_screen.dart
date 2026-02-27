@@ -57,6 +57,8 @@ class _EditorScreenState extends State<EditorScreen> {
   static const double _defaultFrameRate = 30.0;
   static const double _loopBoundaryEpsilonSeconds = 0.03;
   static const double _reverseStepSeconds = 1 / _defaultFrameRate;
+  static const int _initialMobileThumbnailCount = 8;
+  static const Duration _slowOpenIndicatorDelay = Duration(seconds: 2);
 
   static const String _prefExportFormat = 'export_format';
   static const String _prefLoopCount = 'export_loop_count';
@@ -85,6 +87,8 @@ class _EditorScreenState extends State<EditorScreen> {
   Timer? _reverseTicker;
   Timer? _scrubSeekTimer;
   Timer? _settingsPersistDebounce;
+  Timer? _durationProbeFallbackTimer;
+  Timer? _slowOpenIndicatorTimer;
 
   bool _reverseTickBusy = false;
   bool _isScrubSeekInFlight = false;
@@ -99,6 +103,8 @@ class _EditorScreenState extends State<EditorScreen> {
   bool _isDraggingReplace = false;
   bool _isScrubbing = false;
   bool _isLoopBoundaryTransitioning = false;
+  bool _quickThumbnailPhaseCompleted = false;
+  bool _isSlowOpeningVisible = false;
 
   bool _resumePlaybackAfterScrub = false;
   bool _resumeReverseAfterScrub = false;
@@ -157,6 +163,7 @@ class _EditorScreenState extends State<EditorScreen> {
 
     _durationSubscription = _player.stream.duration.listen((duration) {
       if (duration > Duration.zero) {
+        _durationProbeFallbackTimer?.cancel();
         _editorController.setTotalDuration(duration);
       }
     });
@@ -220,15 +227,22 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Future<void> _initialize() async {
-    await _loadExportSettings();
-    await _editorController.loadDuration(widget.inputPath);
+    final initializeTimer = Stopwatch()..start();
+    unawaited(_loadExportSettings());
+    _scheduleDurationProbeFallback();
+
     _editorController.resetTrimToFullRange();
     _playheadNotifier.value = 0;
+
     try {
+      _beginSlowOpenIndicatorWatch();
+      debugPrint('[EditorInit] player.open start: ${initializeTimer.elapsedMilliseconds}ms');
       await _player.open(Media(widget.inputPath));
+      debugPrint('[EditorInit] player.open done: ${initializeTimer.elapsedMilliseconds}ms');
       await _player.seek(Duration.zero);
       await _player.play();
       _scheduleThumbnailBuild(force: true);
+      debugPrint('[EditorInit] first playback started: ${initializeTimer.elapsedMilliseconds}ms');
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -237,7 +251,47 @@ class _EditorScreenState extends State<EditorScreen> {
           behavior: _snackBarBehavior,
         ),
       );
+    } finally {
+      _endSlowOpenIndicatorWatch();
     }
+  }
+
+  void _beginSlowOpenIndicatorWatch() {
+    _slowOpenIndicatorTimer?.cancel();
+    _slowOpenIndicatorTimer = Timer(_slowOpenIndicatorDelay, () {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _isSlowOpeningVisible = true);
+    });
+  }
+
+  void _endSlowOpenIndicatorWatch() {
+    _slowOpenIndicatorTimer?.cancel();
+    _slowOpenIndicatorTimer = null;
+    if (!mounted) {
+      _isSlowOpeningVisible = false;
+      return;
+    }
+    if (_isSlowOpeningVisible) {
+      setState(() => _isSlowOpeningVisible = false);
+    }
+  }
+
+  void _scheduleDurationProbeFallback() {
+    _durationProbeFallbackTimer?.cancel();
+    _durationProbeFallbackTimer = Timer(const Duration(seconds: 2), () async {
+      if (_editorController.totalDuration > Duration.zero) {
+        return;
+      }
+
+      final timer = Stopwatch()..start();
+      await _editorController.loadDuration(widget.inputPath);
+      debugPrint(
+        '[EditorInit] fallback duration probe done: '
+        '${timer.elapsedMilliseconds}ms',
+      );
+    });
   }
 
   Future<void> _loadExportSettings() async {
@@ -430,6 +484,7 @@ class _EditorScreenState extends State<EditorScreen> {
     }
 
     final generation = ++_thumbnailGeneration;
+    final thumbnailTimer = Stopwatch()..start();
     if (mounted && !_isScrubbing) {
       setState(() => _isLoadingThumbnails = true);
     } else {
@@ -437,17 +492,26 @@ class _EditorScreenState extends State<EditorScreen> {
     }
 
     try {
+      final runQuickPass =
+          _isMobilePlatform && !_quickThumbnailPhaseCompleted && _thumbnails.isEmpty;
       final thumbnails = await _thumbnailService.buildStrip(
         inputPath: widget.inputPath,
         duration: _editorController.totalDuration,
         zoomLevel: zoom,
         viewportWidth: _timelineViewportWidth,
         tileBaseWidth: _tileBaseWidth,
+        targetCountCap: runQuickPass ? _initialMobileThumbnailCount : null,
+        cacheVariant: runQuickPass ? 'quick' : 'full',
       );
 
       if (!mounted || generation != _thumbnailGeneration) {
         return;
       }
+
+      debugPrint(
+        '[Thumbnail] loaded ${thumbnails.length} items '
+        '(quick=$runQuickPass) in ${thumbnailTimer.elapsedMilliseconds}ms',
+      );
 
       if (_isScrubbing) {
         _deferredThumbnails = thumbnails;
@@ -459,6 +523,11 @@ class _EditorScreenState extends State<EditorScreen> {
           _lastLoadedZoom = zoom;
           _lastLoadedViewportBucket = viewportBucket;
         });
+      }
+
+      if (runQuickPass) {
+        _quickThumbnailPhaseCompleted = true;
+        _scheduleThumbnailBuild(force: true);
       }
     } finally {
       if (mounted && generation == _thumbnailGeneration) {
@@ -1141,6 +1210,8 @@ class _EditorScreenState extends State<EditorScreen> {
     _thumbnailDebounce?.cancel();
     _scrubSeekTimer?.cancel();
     _settingsPersistDebounce?.cancel();
+    _durationProbeFallbackTimer?.cancel();
+    _slowOpenIndicatorTimer?.cancel();
     _stopReverseTicker();
     _durationSubscription?.cancel();
     _positionSubscription?.cancel();
@@ -1186,6 +1257,34 @@ class _EditorScreenState extends State<EditorScreen> {
                   positionLabel: _formatDuration(playheadDuration),
                   isPingPong: controller.loopMode == LoopMode.pingPong,
                   isReverseDirection: _isReverseDirection,
+                  centerOverlay: _isSlowOpeningVisible
+                      ? DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.56),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                                SizedBox(width: 10),
+                                Text('iCloudから動画を読み込み中…'),
+                              ],
+                            ),
+                          ),
+                        )
+                      : null,
                   bottomOverlay: PlaybackTransportBar(
                     isPlaying: _isPlaybackActive,
                     isDisabled:

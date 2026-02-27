@@ -19,6 +19,7 @@ class _ImportScreenState extends State<ImportScreen> {
   final FileImportService _fileImportService = FileImportService();
 
   bool _dragging = false;
+  bool _isPicking = false;
   String? _errorMessage;
 
   bool get _supportsDragDrop {
@@ -27,15 +28,37 @@ class _ImportScreenState extends State<ImportScreen> {
   }
 
   Future<void> _pickFile() async {
-    final path = await _fileImportService.pickVideoFromFileApp(
-      dialogTitle: 'ファイルアプリから動画を選択',
-    );
-    await _handlePickedPath(path);
+    if (_isPicking) {
+      return;
+    }
+
+    setState(() => _isPicking = true);
+    try {
+      final path = await _fileImportService.pickVideoFromFileApp(
+        dialogTitle: 'ファイルアプリから動画を選択',
+      );
+      await _handlePickedPath(path);
+    } finally {
+      if (mounted) {
+        setState(() => _isPicking = false);
+      }
+    }
   }
 
   Future<void> _openLibrary() async {
-    final path = await _fileImportService.pickVideoFromPhotoLibrary();
-    await _handlePickedPath(path);
+    if (_isPicking) {
+      return;
+    }
+
+    setState(() => _isPicking = true);
+    try {
+      final path = await _fileImportService.pickVideoFromPhotoLibrary();
+      await _handlePickedPath(path);
+    } finally {
+      if (mounted) {
+        setState(() => _isPicking = false);
+      }
+    }
   }
 
   Future<void> _handlePickedPath(String? path) async {
@@ -92,12 +115,12 @@ class _ImportScreenState extends State<ImportScreen> {
             alignment: WrapAlignment.center,
             children: <Widget>[
               FilledButton.icon(
-                onPressed: _pickFile,
+                onPressed: _isPicking ? null : _pickFile,
                 icon: const Icon(Icons.upload_file_rounded),
                 label: const Text('ファイルを開く'),
               ),
               OutlinedButton.icon(
-                onPressed: _openLibrary,
+                onPressed: _isPicking ? null : _openLibrary,
                 icon: const Icon(Icons.photo_library_outlined),
                 label: const Text('ライブラリを開く'),
               ),
