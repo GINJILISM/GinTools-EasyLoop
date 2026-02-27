@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 
@@ -15,6 +16,7 @@ class FileImportService {
   ];
 
   final ImagePicker _imagePicker = ImagePicker();
+  bool _isPhotoLibraryRequestInFlight = false;
 
   bool isVideoPath(String path) {
     final extension = p.extension(path).replaceFirst('.', '').toLowerCase();
@@ -52,7 +54,21 @@ class FileImportService {
   }
 
   Future<String?> pickVideoFromPhotoLibrary() async {
-    final picked = await _imagePicker.pickVideo(source: ImageSource.gallery);
-    return picked?.path;
+    if (_isPhotoLibraryRequestInFlight) {
+      return null;
+    }
+
+    _isPhotoLibraryRequestInFlight = true;
+    try {
+      final picked = await _imagePicker.pickVideo(source: ImageSource.gallery);
+      return picked?.path;
+    } on PlatformException catch (error) {
+      if (error.code == 'multiple_request') {
+        return null;
+      }
+      rethrow;
+    } finally {
+      _isPhotoLibraryRequestInFlight = false;
+    }
   }
 }

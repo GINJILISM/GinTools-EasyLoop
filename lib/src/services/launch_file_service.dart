@@ -20,11 +20,16 @@ class LaunchFileService {
   final List<String> _startupArgs;
   final FileImportService _importService;
   final MethodChannel _channel;
-  final StreamController<String> _openedFileController =
-      StreamController<String>.broadcast();
+  late final StreamController<String> _openedFileController =
+      StreamController<String>.broadcast(
+        onListen: _handleStreamListen,
+        onCancel: _handleStreamCancel,
+      );
 
   String? _initialPath;
   bool _isInitialized = false;
+  bool _hasActiveListener = false;
+  final List<String> _pendingOpenedPaths = <String>[];
 
   Future<void> initialize() async {
     if (_isInitialized) {
@@ -62,9 +67,32 @@ class LaunchFileService {
       if (!_importService.isSupportedVideoFile(file)) {
         continue;
       }
-      _openedFileController.add(file.path);
+      final normalized = file.path;
+      if (_hasActiveListener) {
+        _openedFileController.add(normalized);
+      } else {
+        _pendingOpenedPaths.add(normalized);
+        _initialPath ??= normalized;
+      }
       break;
     }
+  }
+
+  void _handleStreamListen() {
+    _hasActiveListener = true;
+    if (_pendingOpenedPaths.isEmpty) {
+      return;
+    }
+
+    final pending = List<String>.from(_pendingOpenedPaths);
+    _pendingOpenedPaths.clear();
+    for (final path in pending) {
+      _openedFileController.add(path);
+    }
+  }
+
+  void _handleStreamCancel() {
+    _hasActiveListener = false;
   }
 
   List<String> _extractIncomingPaths(dynamic args) {

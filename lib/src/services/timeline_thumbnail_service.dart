@@ -13,7 +13,11 @@ import '../models/timeline_thumbnail.dart';
 class TimelineThumbnailService {
   TimelineThumbnailService({this.ffmpegExecutable = 'ffmpeg'});
 
+  static const int _iosMaxTargetCount = 30;
+
   final String ffmpegExecutable;
+  final Map<String, Future<List<TimelineThumbnail>>> _inFlightBuilds =
+      <String, Future<List<TimelineThumbnail>>>{};
 
   bool get _useEmbeddedFfmpegKit {
     if (kIsWeb) return false;
@@ -26,6 +30,8 @@ class TimelineThumbnailService {
     required double zoomLevel,
     required double viewportWidth,
     required double tileBaseWidth,
+    int? targetCountCap,
+    String cacheVariant = 'full',
   }) async {
     final sourceFile = File(inputPath);
     if (!sourceFile.existsSync() || duration <= Duration.zero) {
@@ -46,7 +52,48 @@ class TimelineThumbnailService {
       zoomLevel: zoomLevel,
       viewportWidth: viewportWidth,
       tileBaseWidth: tileBaseWidth,
+      cacheVariant: cacheVariant,
+      targetCountCap: targetCountCap,
     );
+
+    final inFlight = _inFlightBuilds[cacheKey];
+    if (inFlight != null) {
+      return inFlight;
+    }
+
+    final future = _buildStripInternal(
+      inputPath: inputPath,
+      duration: duration,
+      zoomLevel: zoomLevel,
+      viewportWidth: viewportWidth,
+      tileBaseWidth: tileBaseWidth,
+      cacheKey: cacheKey,
+      totalSeconds: totalSeconds,
+      targetCount: targetCount,
+      targetCountCap: targetCountCap,
+    );
+    _inFlightBuilds[cacheKey] = future;
+
+    try {
+      return await future;
+    } finally {
+      if (identical(_inFlightBuilds[cacheKey], future)) {
+        _inFlightBuilds.remove(cacheKey);
+      }
+    }
+  }
+
+  Future<List<TimelineThumbnail>> _buildStripInternal({
+    required String inputPath,
+    required Duration duration,
+    required double zoomLevel,
+    required double viewportWidth,
+    required double tileBaseWidth,
+    required String cacheKey,
+    required double totalSeconds,
+    required int targetCount,
+    required int? targetCountCap,
+  }) async {
 
     final cacheRoot = await getTemporaryDirectory();
     final stripDir = Directory(
@@ -64,10 +111,18 @@ class TimelineThumbnailService {
 
     await stripDir.create(recursive: true);
 
-    final span = totalSeconds / targetCount;
+    var effectiveTargetCount = targetCount;
+    if (!kIsWeb && Platform.isIOS) {
+      effectiveTargetCount = effectiveTargetCount.clamp(6, _iosMaxTargetCount);
+    }
+    if (targetCountCap != null) {
+      effectiveTargetCount = effectiveTargetCount.clamp(6, targetCountCap);
+    }
+
+    final span = totalSeconds / effectiveTargetCount;
     final thumbnails = <TimelineThumbnail>[];
 
-    for (var i = 0; i < targetCount; i++) {
+    for (var i = 0; i < effectiveTargetCount; i++) {
       final start = span * i;
       final end = (start + span).clamp(0.0, totalSeconds);
       final outputPath = p.join(
@@ -87,6 +142,8 @@ class TimelineThumbnailService {
         'scale=96:-2',
         '-q:v',
         '18',
+        '-update',
+        '1',
         outputPath,
       ];
 
@@ -143,12 +200,14 @@ class TimelineThumbnailService {
     required double zoomLevel,
     required double viewportWidth,
     required double tileBaseWidth,
+    String cacheVariant = 'full',
+    int? targetCountCap,
   }) {
     final viewportBucket = (viewportWidth / 32).round();
     final digest = md5
         .convert(
           utf8.encode(
-            '$inputPath|$fileStamp|$durationMs|${zoomLevel.toStringAsFixed(2)}|vb:$viewportBucket|tile:${tileBaseWidth.toStringAsFixed(0)}',
+            '$inputPath|$fileStamp|$durationMs|${zoomLevel.toStringAsFixed(2)}|vb:$viewportBucket|tile:${tileBaseWidth.toStringAsFixed(0)}|v:$cacheVariant|cap:${targetCountCap ?? 'none'}',
           ),
         )
         .toString();

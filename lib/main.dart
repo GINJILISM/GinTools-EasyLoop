@@ -7,11 +7,15 @@ import 'src/services/launch_file_service.dart';
 import 'src/state/app_controller.dart';
 
 Future<void> main(List<String> args) async {
+  final startupTimer = Stopwatch()..start();
   WidgetsFlutterBinding.ensureInitialized();
+  debugPrint('[Startup] WidgetsFlutterBinding ready: ${startupTimer.elapsedMilliseconds}ms');
   MediaKit.ensureInitialized();
+  debugPrint('[Startup] MediaKit initialized: ${startupTimer.elapsedMilliseconds}ms');
 
   final launchFileService = LaunchFileService(startupArgs: args);
   await launchFileService.initialize();
+  debugPrint('[Startup] LaunchFileService initialized: ${startupTimer.elapsedMilliseconds}ms');
 
   runApp(
     ChangeNotifierProvider(
@@ -19,4 +23,5 @@ Future<void> main(List<String> args) async {
       child: const LoopEditorApp(),
     ),
   );
+  debugPrint('[Startup] runApp called: ${startupTimer.elapsedMilliseconds}ms');
 }

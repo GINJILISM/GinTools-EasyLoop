@@ -3,6 +3,11 @@ import UIKit
 
 enum SharedMediaBridge {
   static let channelName = "com.gintoolflutter.launch/open_file"
+  static let appGroupIdentifier = "group.com.ginjilism.gintool"
+
+  private static let sharedInboxFolderName = "incoming_share"
+  private static let importScheme = "easyloop"
+  private static let importHost = "import-shared"
 
   static func post(path: String) {
     post(paths: [path])
@@ -32,6 +37,7 @@ enum SharedMediaBridge {
   }
 
   static func materializeIncomingUrl(_ url: URL) -> URL? {
+    let start = CFAbsoluteTimeGetCurrent()
     let wasAccessed = url.startAccessingSecurityScopedResource()
     defer {
       if wasAccessed {
@@ -65,10 +71,122 @@ enum SharedMediaBridge {
         try fileManager.removeItem(at: destination)
       }
       try fileManager.copyItem(at: url, to: destination)
+
+      let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
+      NSLog("[SharedMedia] materialized in %dms: %@", elapsedMs, destination.lastPathComponent)
       return destination
     } catch {
+      let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
+      NSLog("[SharedMedia] materialize failed in %dms: %@", elapsedMs, error.localizedDescription)
       return nil
     }
+  }
+
+  static func consumeIncomingUrl(_ url: URL) -> Bool {
+    if url.isFileURL, let materialized = materializeIncomingUrl(url) {
+      post(path: materialized.path)
+      return true
+    }
+
+    if let materialized = materializeFromAppGroup(url) {
+      post(path: materialized.path)
+      return true
+    }
+
+    return false
+  }
+
+  static func consumePendingSharedInboxFiles() -> Int {
+    let fileManager = FileManager.default
+    guard let containerUrl = fileManager.containerURL(
+      forSecurityApplicationGroupIdentifier: appGroupIdentifier
+    ) else {
+      return 0
+    }
+
+    let inbox = containerUrl.appendingPathComponent(sharedInboxFolderName, isDirectory: true)
+    guard let urls = try? fileManager.contentsOfDirectory(
+      at: inbox,
+      includingPropertiesForKeys: [.isRegularFileKey, .contentModificationDateKey],
+      options: [.skipsHiddenFiles]
+    ) else {
+      return 0
+    }
+
+    let regularFiles = urls.filter { url in
+      (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
+    }
+
+    if regularFiles.isEmpty {
+      return 0
+    }
+
+    let sortedFiles = regularFiles.sorted { lhs, rhs in
+      let leftDate =
+        (try? lhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
+        ?? .distantPast
+      let rightDate =
+        (try? rhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
+        ?? .distantPast
+      return leftDate < rightDate
+    }
+
+    var importedPaths: [String] = []
+    for source in sortedFiles {
+      guard let materialized = materializeIncomingUrl(source) else {
+        continue
+      }
+      importedPaths.append(materialized.path)
+      try? fileManager.removeItem(at: source)
+    }
+
+    post(paths: importedPaths)
+    return importedPaths.count
+  }
+
+  private static func materializeFromAppGroup(_ url: URL) -> URL? {
+    guard
+      let scheme = url.scheme?.lowercased(),
+      scheme == importScheme,
+      url.host == importHost
+    else {
+      return nil
+    }
+
+    guard
+      let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+      let fileName = components.queryItems?
+        .first(where: { $0.name == "file" })?
+        .value,
+      !fileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    else {
+      NSLog("[SharedMedia] Missing file parameter in URL: %@", url.absoluteString)
+      return nil
+    }
+
+    let fileManager = FileManager.default
+    guard let containerUrl = fileManager.containerURL(
+      forSecurityApplicationGroupIdentifier: appGroupIdentifier
+    ) else {
+      NSLog("[SharedMedia] App Group container unavailable: %@", appGroupIdentifier)
+      return nil
+    }
+
+    let source = containerUrl
+      .appendingPathComponent(sharedInboxFolderName, isDirectory: true)
+      .appendingPathComponent(fileName)
+
+    guard fileManager.fileExists(atPath: source.path) else {
+      NSLog("[SharedMedia] Shared file not found: %@", source.path)
+      return nil
+    }
+
+    guard let materialized = materializeIncomingUrl(source) else {
+      return nil
+    }
+
+    try? fileManager.removeItem(at: source)
+    return materialized
   }
 }
 
@@ -86,11 +204,14 @@ private extension Notification.Name {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    let didFinish = super.application(application, didFinishLaunchingWithOptions: launchOptions)
     GeneratedPluginRegistrant.register(with: self)
     configureLaunchChannelIfNeeded()
     registerIncomingObserver()
-    return didFinish
+    let consumed = SharedMediaBridge.consumePendingSharedInboxFiles()
+    if consumed > 0 {
+      NSLog("[SharedMedia] consumed pending inbox files at launch: %d", consumed)
+    }
+    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
   override func application(
@@ -98,11 +219,20 @@ private extension Notification.Name {
     open url: URL,
     options: [UIApplication.OpenURLOptionsKey: Any] = [:]
   ) -> Bool {
-    if let materialized = SharedMediaBridge.materializeIncomingUrl(url) {
-      SharedMediaBridge.post(path: materialized.path)
+    if SharedMediaBridge.consumeIncomingUrl(url) {
       return true
     }
     return super.application(app, open: url, options: options)
+  }
+
+  override func applicationDidBecomeActive(_ application: UIApplication) {
+    super.applicationDidBecomeActive(application)
+    configureLaunchChannelIfNeeded()
+    flushPendingPayloadsIfNeeded()
+    let consumed = SharedMediaBridge.consumePendingSharedInboxFiles()
+    if consumed > 0 {
+      NSLog("[SharedMedia] consumed pending inbox files on active: %d", consumed)
+    }
   }
 
   deinit {
@@ -128,6 +258,7 @@ private extension Notification.Name {
 
   private func enqueue(payload: [String: Any]) {
     pendingPayloads.append(payload)
+    NSLog("[SharedMedia] queued payloads: %d", pendingPayloads.count)
     configureLaunchChannelIfNeeded()
     flushPendingPayloadsIfNeeded()
   }
@@ -136,13 +267,17 @@ private extension Notification.Name {
     guard launchChannel == nil else {
       return
     }
-    guard let controller = window?.rootViewController as? FlutterViewController else {
+
+    guard let controller = resolveFlutterViewController() else {
+      NSLog("[SharedMedia] FlutterViewController not ready yet")
       return
     }
+
     launchChannel = FlutterMethodChannel(
       name: SharedMediaBridge.channelName,
       binaryMessenger: controller.binaryMessenger
     )
+    NSLog("[SharedMedia] launch channel configured")
   }
 
   private func flushPendingPayloadsIfNeeded() {
@@ -152,9 +287,81 @@ private extension Notification.Name {
 
     let payloads = pendingPayloads
     pendingPayloads.removeAll()
+    NSLog("[SharedMedia] flushing payload count: %d", payloads.count)
 
     for payload in payloads {
       launchChannel.invokeMethod("onReceiveSharedMedia", arguments: payload)
     }
+  }
+
+  private func resolveFlutterViewController() -> FlutterViewController? {
+    if let direct = window?.rootViewController as? FlutterViewController {
+      return direct
+    }
+
+    for scene in UIApplication.shared.connectedScenes {
+      guard let windowScene = scene as? UIWindowScene else {
+        continue
+      }
+
+      for window in windowScene.windows {
+        if let controller = findFlutterViewController(from: window.rootViewController) {
+          return controller
+        }
+      }
+    }
+
+    return nil
+  }
+
+  private func findFlutterViewController(from root: UIViewController?) -> FlutterViewController? {
+    guard let root else {
+      return nil
+    }
+
+    if let flutter = root as? FlutterViewController {
+      return flutter
+    }
+
+    if let flutter = findInContainerControllers(root) {
+      return flutter
+    }
+
+    return findInDescendants(root)
+  }
+
+  private func findInContainerControllers(_ root: UIViewController) -> FlutterViewController? {
+    if let navigation = root as? UINavigationController {
+      for controller in navigation.viewControllers {
+        if let flutter = findFlutterViewController(from: controller) {
+          return flutter
+        }
+      }
+    }
+
+    if let tab = root as? UITabBarController {
+      for controller in tab.viewControllers ?? [] {
+        if let flutter = findFlutterViewController(from: controller) {
+          return flutter
+        }
+      }
+    }
+
+    return nil
+  }
+
+  private func findInDescendants(_ root: UIViewController) -> FlutterViewController? {
+    if let presented = root.presentedViewController,
+      let flutter = findFlutterViewController(from: presented) {
+      return flutter
+    }
+
+    for child in root.children {
+      if let flutter = findFlutterViewController(from: child) {
+        return flutter
+      }
+    }
+
+    return nil
   }
 }

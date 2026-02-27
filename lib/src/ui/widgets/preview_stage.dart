@@ -8,6 +8,7 @@ class PreviewStage extends StatelessWidget {
     required this.isPingPong,
     required this.isReverseDirection,
     this.bottomOverlay,
+    this.centerOverlay,
   });
 
   final Widget video;
@@ -15,6 +16,7 @@ class PreviewStage extends StatelessWidget {
   final bool isPingPong;
   final bool isReverseDirection;
   final Widget? bottomOverlay;
+  final Widget? centerOverlay;
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +57,12 @@ class PreviewStage extends StatelessWidget {
                 label: Text(
                   isReverseDirection ? 'ピンポン: 逆方向' : 'ピンポン: 順方向',
                 ),
+              ),
+            ),
+          if (centerOverlay != null)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Center(child: centerOverlay!),
               ),
             ),
           if (bottomOverlay != null)
