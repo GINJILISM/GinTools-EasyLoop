@@ -34,13 +34,70 @@ void main() {
     expect(pps, closeTo(100.0, 0.0001));
   });
 
-  test('初期ロードでstart=0/end=durationになる', () {
+  test('初期ロードでstart=0/end=末尾1フレーム手前になる', () {
     final controller = EditorController(videoProcessor: _FakeProcessor());
 
     controller.setTotalDuration(const Duration(seconds: 12));
 
     expect(controller.trimStartSeconds, closeTo(0, 0.0001));
-    expect(controller.trimEndSeconds, closeTo(12, 0.0001));
+    expect(
+      controller.trimEndSeconds,
+      closeTo(12 - EditorController.defaultTrimEndOffsetSeconds, 0.0001),
+    );
+  });
+
+  test('未操作時はduration更新のたびに全尺へ追従する', () {
+    final controller = EditorController(videoProcessor: _FakeProcessor());
+
+    controller.setTotalDuration(const Duration(milliseconds: 400));
+    expect(controller.trimStartSeconds, closeTo(0, 0.0001));
+    expect(
+      controller.trimEndSeconds,
+      closeTo(0.4 - EditorController.defaultTrimEndOffsetSeconds, 0.0001),
+    );
+
+    controller.setTotalDuration(const Duration(seconds: 12));
+    expect(controller.trimStartSeconds, closeTo(0, 0.0001));
+    expect(
+      controller.trimEndSeconds,
+      closeTo(12 - EditorController.defaultTrimEndOffsetSeconds, 0.0001),
+    );
+    expect(controller.hasUserEditedTrim, isFalse);
+  });
+
+  test('手動トリム後はduration更新でもユーザー編集を保持する', () {
+    final controller = EditorController(videoProcessor: _FakeProcessor());
+
+    controller.setTotalDuration(const Duration(seconds: 10));
+    controller.setTrimRange(startSeconds: 1.0, endSeconds: 4.0);
+    controller.setTotalDuration(const Duration(seconds: 12));
+
+    expect(controller.trimStartSeconds, closeTo(1.0, 0.0001));
+    expect(controller.trimEndSeconds, closeTo(4.0, 0.0001));
+    expect(controller.hasUserEditedTrim, isTrue);
+  });
+
+  test('未操作時は再生実績に合わせて自動end補正できる', () {
+    final controller = EditorController(videoProcessor: _FakeProcessor());
+
+    controller.setTotalDuration(const Duration(seconds: 2));
+    controller.setAutoDetectedTrimEnd(1.0);
+
+    expect(controller.trimStartSeconds, closeTo(0, 0.0001));
+    expect(controller.trimEndSeconds, closeTo(1.0, 0.0001));
+    expect(controller.hasUserEditedTrim, isFalse);
+  });
+
+  test('手動トリム後は自動end補正を適用しない', () {
+    final controller = EditorController(videoProcessor: _FakeProcessor());
+
+    controller.setTotalDuration(const Duration(seconds: 2));
+    controller.setTrimRange(startSeconds: 0.2, endSeconds: 1.2);
+    controller.setAutoDetectedTrimEnd(0.8);
+
+    expect(controller.trimStartSeconds, closeTo(0.2, 0.0001));
+    expect(controller.trimEndSeconds, closeTo(1.2, 0.0001));
+    expect(controller.hasUserEditedTrim, isTrue);
   });
 
   test('trim更新時にplayheadが範囲内へ補正される', () {

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
@@ -55,7 +54,7 @@ class EditorScreen extends StatefulWidget {
 class _EditorScreenState extends State<EditorScreen> {
   static const double _tileBaseWidth = 96;
   static const double _defaultFrameRate = 30.0;
-  static const double _loopBoundaryEpsilonSeconds = 0.03;
+  static const double _reverseStartBoundaryEpsilonSeconds = 0.03;
   static const double _reverseStepSeconds = 1 / _defaultFrameRate;
   static const int _initialMobileThumbnailCount = 8;
   static const Duration _slowOpenIndicatorDelay = Duration(seconds: 2);
@@ -80,6 +79,7 @@ class _EditorScreenState extends State<EditorScreen> {
 
   StreamSubscription<Duration>? _durationSubscription;
   StreamSubscription<Duration>? _positionSubscription;
+  StreamSubscription<bool>? _completedSubscription;
 
   final ValueNotifier<double> _playheadNotifier = ValueNotifier<double>(0);
 
@@ -187,10 +187,7 @@ class _EditorScreenState extends State<EditorScreen> {
       if (trimEnd <= trimStart + EditorController.minTrimLengthSeconds) {
         return;
       }
-      final boundarySeconds = math.max(
-        trimStart,
-        trimEnd - _loopBoundaryEpsilonSeconds,
-      );
+      final boundarySeconds = trimEnd;
 
       if (_editorController.loopMode == LoopMode.pingPong) {
         if (!_isReverseDirection && currentSeconds >= boundarySeconds) {
@@ -202,6 +199,46 @@ class _EditorScreenState extends State<EditorScreen> {
       if (currentSeconds >= boundarySeconds) {
         await _restartForwardLoop(trimStart);
       }
+    });
+
+    _completedSubscription = _player.stream.completed.listen((completed) async {
+      if (!completed ||
+          !_isPlaybackActive ||
+          !_editorController.isAutoLoopEnabled ||
+          _isScrubbing ||
+          _isLoopBoundaryTransitioning) {
+        return;
+      }
+
+      final trimStart = _editorController.trimStartSeconds;
+      final trimEnd = _editorController.trimEndSeconds;
+      final reachedSeconds = _playheadNotifier.value;
+      if (trimEnd <= trimStart + EditorController.minTrimLengthSeconds) {
+        return;
+      }
+
+      if (!_editorController.hasUserEditedTrim &&
+          reachedSeconds >= trimStart + EditorController.minTrimLengthSeconds &&
+          reachedSeconds <
+              trimEnd - EditorController.autoTrimAdjustEpsilonSeconds) {
+        final adjustedEnd = (reachedSeconds -
+                EditorController.defaultTrimEndOffsetSeconds)
+            .clamp(
+              trimStart + EditorController.minTrimLengthSeconds,
+              trimEnd,
+            )
+            .toDouble();
+        _editorController.setAutoDetectedTrimEnd(adjustedEnd);
+      }
+
+      if (_editorController.loopMode == LoopMode.pingPong) {
+        if (!_isReverseDirection) {
+          await _enterReversePhase();
+        }
+        return;
+      }
+
+      await _restartForwardLoop(trimStart);
     });
   }
 
@@ -231,7 +268,6 @@ class _EditorScreenState extends State<EditorScreen> {
     unawaited(_loadExportSettings());
     _scheduleDurationProbeFallback();
 
-    _editorController.resetTrimToFullRange();
     _playheadNotifier.value = 0;
 
     try {
@@ -414,12 +450,8 @@ class _EditorScreenState extends State<EditorScreen> {
       } else if (_editorController.loopMode == LoopMode.pingPong &&
           _isPlaybackActive &&
           _editorController.isAutoLoopEnabled) {
-        final trimStart = _editorController.trimStartSeconds;
         final trimEnd = _editorController.trimEndSeconds;
-        final boundary = math.max(
-          trimStart,
-          trimEnd - _loopBoundaryEpsilonSeconds,
-        );
+        final boundary = trimEnd;
         if (_playheadNotifier.value >= boundary) {
           unawaited(_enterReversePhase());
         }
@@ -512,6 +544,15 @@ class _EditorScreenState extends State<EditorScreen> {
         '[Thumbnail] loaded ${thumbnails.length} items '
         '(quick=$runQuickPass) in ${thumbnailTimer.elapsedMilliseconds}ms',
       );
+      if (thumbnails.isEmpty) {
+        debugPrint(
+          '[Thumbnail] empty result '
+          'duration=${_editorController.totalDuration.inMilliseconds}ms '
+          'viewport=${_timelineViewportWidth.toStringAsFixed(1)} '
+          'zoom=${zoom.toStringAsFixed(2)} '
+          'path=${widget.inputPath}',
+        );
+      }
 
       if (_isScrubbing) {
         _deferredThumbnails = thumbnails;
@@ -646,7 +687,7 @@ class _EditorScreenState extends State<EditorScreen> {
         _editorController.setPlayheadFromScrub(next);
         _isSeekingByReverseTicker = false;
 
-        if (next <= trimStart + _loopBoundaryEpsilonSeconds) {
+        if (next <= trimStart + _reverseStartBoundaryEpsilonSeconds) {
           _isSeekingByReverseTicker = true;
           await _player.seek(
             Duration(milliseconds: (trimStart * 1000).round()),
@@ -681,12 +722,8 @@ class _EditorScreenState extends State<EditorScreen> {
       await _player.pause();
     } else {
       _isPlaybackActive = true;
-      final trimStart = _editorController.trimStartSeconds;
       final trimEnd = _editorController.trimEndSeconds;
-      final boundary = math.max(
-        trimStart,
-        trimEnd - _loopBoundaryEpsilonSeconds,
-      );
+      final boundary = trimEnd;
       if (_editorController.loopMode == LoopMode.pingPong &&
           _isReverseDirection) {
         await _player.pause();
@@ -1215,6 +1252,7 @@ class _EditorScreenState extends State<EditorScreen> {
     _stopReverseTicker();
     _durationSubscription?.cancel();
     _positionSubscription?.cancel();
+    _completedSubscription?.cancel();
     _editorController.removeListener(_handleControllerChanged);
     _playheadNotifier.dispose();
     _player.dispose();
@@ -1323,7 +1361,12 @@ class _EditorScreenState extends State<EditorScreen> {
                       ),
                     Expanded(
                       child: TrimTimeline(
-                        totalDuration: controller.totalDuration,
+                        totalDuration: controller.hasUserEditedTrim
+                            ? controller.totalDuration
+                            : Duration(
+                                milliseconds: (controller.trimEndSeconds * 1000)
+                                    .round(),
+                              ),
                         trimStartSeconds: controller.trimStartSeconds,
                         trimEndSeconds: controller.trimEndSeconds,
                         playheadSeconds: playheadSeconds,

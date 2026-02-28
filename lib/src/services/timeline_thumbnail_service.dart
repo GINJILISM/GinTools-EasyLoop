@@ -94,8 +94,12 @@ class TimelineThumbnailService {
     required int targetCount,
     required int? targetCountCap,
   }) async {
-
     final cacheRoot = await getTemporaryDirectory();
+    final processingInputPath = await _prepareInputForProcessing(
+      inputPath,
+      cacheRoot,
+      cacheKey,
+    );
     final stripDir = Directory(
       p.join(cacheRoot.path, 'timeline_cache', cacheKey),
     );
@@ -125,29 +129,53 @@ class TimelineThumbnailService {
     for (var i = 0; i < effectiveTargetCount; i++) {
       final start = span * i;
       final end = (start + span).clamp(0.0, totalSeconds);
-      final outputPath = p.join(
+      final jpgOutputPath = p.join(
         stripDir.path,
         'thumb_${i.toString().padLeft(3, '0')}.jpg',
       );
+      var outputPath = jpgOutputPath;
+      var succeeded = await _runThumbnailCommand(
+        <String>[
+          '-y',
+          '-ss',
+          start.toStringAsFixed(3),
+          '-i',
+          processingInputPath,
+          '-frames:v',
+          '1',
+          '-vf',
+          'scale=96:-2',
+          '-q:v',
+          '18',
+          '-f',
+          'image2',
+          outputPath,
+        ],
+      );
 
-      final args = <String>[
-        '-y',
-        '-ss',
-        start.toStringAsFixed(3),
-        '-i',
-        inputPath,
-        '-frames:v',
-        '1',
-        '-vf',
-        'scale=96:-2',
-        '-q:v',
-        '18',
-        '-update',
-        '1',
-        outputPath,
-      ];
-
-      final succeeded = await _runThumbnailCommand(args);
+      if ((!succeeded || !File(outputPath).existsSync()) && _useEmbeddedFfmpegKit) {
+        final pngOutputPath = p.join(
+          stripDir.path,
+          'thumb_${i.toString().padLeft(3, '0')}.png',
+        );
+        outputPath = pngOutputPath;
+        succeeded = await _runThumbnailCommand(
+          <String>[
+            '-y',
+            '-ss',
+            start.toStringAsFixed(3),
+            '-i',
+            processingInputPath,
+            '-frames:v',
+            '1',
+            '-vf',
+            'scale=96:-2',
+            '-f',
+            'image2',
+            outputPath,
+          ],
+        );
+      }
 
       if (succeeded && File(outputPath).existsSync()) {
         thumbnails.add(
@@ -167,11 +195,67 @@ class TimelineThumbnailService {
     return thumbnails;
   }
 
+  Future<String> _prepareInputForProcessing(
+    String rawInputPath,
+    Directory cacheRoot,
+    String cacheKey,
+  ) async {
+    final resolvedPath = _resolveInputPath(rawInputPath);
+    final inputFile = File(resolvedPath);
+    if (!await inputFile.exists()) {
+      throw FileSystemException('Input video not found for thumbnails', resolvedPath);
+    }
+
+    if (!_useEmbeddedFfmpegKit) {
+      return resolvedPath;
+    }
+
+    final extension = p.extension(resolvedPath).trim();
+    final stagingDir = Directory(p.join(cacheRoot.path, 'timeline_inputs'));
+    await stagingDir.create(recursive: true);
+    final stagedPath = p.join(
+      stagingDir.path,
+      'input_$cacheKey${extension.isEmpty ? '.mp4' : extension}',
+    );
+
+    if (!p.equals(resolvedPath, stagedPath)) {
+      await inputFile.copy(stagedPath);
+    }
+    return stagedPath;
+  }
+
+  String _resolveInputPath(String rawPath) {
+    final value = rawPath.trim();
+    if (value.startsWith('file://')) {
+      return Uri.parse(value).toFilePath();
+    }
+    return value;
+  }
+
   Future<bool> _runThumbnailCommand(List<String> args) async {
     if (_useEmbeddedFfmpegKit) {
-      final session = await FFmpegKit.executeWithArgumentsAsync(args);
+      final session = await FFmpegKit.executeWithArguments(args);
       final returnCode = await session.getReturnCode();
-      return ReturnCode.isSuccess(returnCode);
+      final ok = ReturnCode.isSuccess(returnCode);
+      if (!ok) {
+        final failStack = await session.getFailStackTrace();
+        final logs = await session.getAllLogsAsString();
+        final code = returnCode?.getValue();
+        debugPrint('[Thumbnail][ffmpeg-kit] command failed: ${args.join(' ')}');
+        debugPrint(
+          '[Thumbnail][ffmpeg-kit] returnCode: '
+          '${code ?? 'null(session not completed or aborted)'}',
+        );
+        if (failStack != null && failStack.isNotEmpty) {
+          debugPrint('[Thumbnail][ffmpeg-kit] stack: $failStack');
+        }
+        if (logs != null && logs.isNotEmpty) {
+          final lines = logs.split('\n');
+          final preview = lines.take(20).join('\n');
+          debugPrint('[Thumbnail][ffmpeg-kit] logs(head): $preview');
+        }
+      }
+      return ok;
     }
 
     final result = await Process.run(

@@ -13,6 +13,8 @@ class EditorController extends ChangeNotifier {
   EditorController({required this.videoProcessor});
 
   static const double minTrimLengthSeconds = 0.1;
+  static const double defaultTrimEndOffsetSeconds = 1 / 30;
+  static const double autoTrimAdjustEpsilonSeconds = 0.02;
 
   final VideoProcessor videoProcessor;
 
@@ -22,6 +24,7 @@ class EditorController extends ChangeNotifier {
   double playheadSeconds = 0;
   double zoomLevel = 1.0;
   bool isAutoLoopEnabled = true;
+  bool _hasUserEditedTrim = false;
 
   LoopMode loopMode = LoopMode.forward;
   ExportFormat exportFormat = ExportFormat.mp4;
@@ -41,6 +44,7 @@ class EditorController extends ChangeNotifier {
       Duration(milliseconds: (trimStartSeconds * 1000).round());
   Duration get trimEnd =>
       Duration(milliseconds: (trimEndSeconds * 1000).round());
+  bool get hasUserEditedTrim => _hasUserEditedTrim;
 
   bool get canExport =>
       !isExporting &&
@@ -73,9 +77,9 @@ class EditorController extends ChangeNotifier {
     final seconds = duration.inMilliseconds / 1000;
     totalDuration = duration;
 
-    if (trimEndSeconds <= 0 || trimEndSeconds > seconds) {
+    if (!_hasUserEditedTrim) {
       trimStartSeconds = 0;
-      trimEndSeconds = seconds;
+      trimEndSeconds = _computeDefaultTrimEndSeconds(seconds);
     } else {
       trimStartSeconds = trimStartSeconds.clamp(0.0, seconds);
       trimEndSeconds = trimEndSeconds.clamp(0.0, seconds);
@@ -93,6 +97,15 @@ class EditorController extends ChangeNotifier {
     notifyListeners();
   }
 
+  double _computeDefaultTrimEndSeconds(double totalSeconds) {
+    if (totalSeconds <= minTrimLengthSeconds) {
+      return totalSeconds;
+    }
+
+    final defaultEnd = totalSeconds - defaultTrimEndOffsetSeconds;
+    return defaultEnd.clamp(minTrimLengthSeconds, totalSeconds).toDouble();
+  }
+
   void resetTrimToFullRange() {
     if (totalDuration <= Duration.zero) {
       return;
@@ -101,6 +114,26 @@ class EditorController extends ChangeNotifier {
     trimStartSeconds = 0;
     trimEndSeconds = totalDuration.inMilliseconds / 1000;
     playheadSeconds = 0;
+    _hasUserEditedTrim = false;
+    notifyListeners();
+  }
+
+  void setAutoDetectedTrimEnd(double endSeconds) {
+    if (totalDuration <= Duration.zero || _hasUserEditedTrim) {
+      return;
+    }
+
+    final maxSeconds = totalDuration.inMilliseconds / 1000;
+    final nextEnd = endSeconds.clamp(minTrimLengthSeconds, maxSeconds);
+    if ((trimEndSeconds - nextEnd).abs() < autoTrimAdjustEpsilonSeconds) {
+      return;
+    }
+
+    trimStartSeconds = 0;
+    trimEndSeconds = nextEnd.toDouble();
+    playheadSeconds = playheadSeconds
+        .clamp(trimStartSeconds, trimEndSeconds)
+        .toDouble();
     notifyListeners();
   }
 
@@ -126,6 +159,7 @@ class EditorController extends ChangeNotifier {
 
     trimStartSeconds = nextStart;
     trimEndSeconds = nextEnd;
+    _hasUserEditedTrim = true;
     playheadSeconds = playheadSeconds
         .clamp(trimStartSeconds, trimEndSeconds)
         .toDouble();
