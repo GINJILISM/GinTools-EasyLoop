@@ -6,6 +6,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/timeline_thumbnail.dart';
+import '../liquid_glass/liquid_glass_refs.dart';
 
 class TrimTimeline extends StatefulWidget {
   const TrimTimeline({
@@ -83,8 +84,6 @@ class _TrimTimelineState extends State<TrimTimeline> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return LayoutBuilder(
       builder: (context, constraints) {
         final viewportWidth = constraints.maxWidth;
@@ -114,7 +113,7 @@ class _TrimTimelineState extends State<TrimTimeline> {
             Expanded(
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0E2438),
+                  color: LiquidGlassRefs.timelineSurface,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Listener(
@@ -243,7 +242,7 @@ class _TrimTimelineState extends State<TrimTimeline> {
                               top: 0,
                               bottom: 0,
                               child: ColoredBox(
-                                color: Colors.black.withOpacity(0.40),
+                                color: Colors.black.withValues(alpha: 0.40),
                               ),
                             ),
                             Positioned(
@@ -252,7 +251,7 @@ class _TrimTimelineState extends State<TrimTimeline> {
                               top: 0,
                               bottom: 0,
                               child: ColoredBox(
-                                color: Colors.black.withOpacity(0.40),
+                                color: Colors.black.withValues(alpha: 0.40),
                               ),
                             ),
                             Positioned(
@@ -261,13 +260,13 @@ class _TrimTimelineState extends State<TrimTimeline> {
                               bottom: 0,
                               child: Container(
                                 width: 2,
-                                color: colorScheme.primary,
+                                color: LiquidGlassRefs.accentOrange,
                               ),
                             ),
                             _buildTrimHandle(
                               key: const Key('trim-handle-start'),
                               x: trimStartPx,
-                              color: colorScheme.tertiary,
+                              color: LiquidGlassRefs.accentOrange,
                               onDragStart: () {
                                 _isDraggingHandle = true;
                               },
@@ -288,7 +287,7 @@ class _TrimTimelineState extends State<TrimTimeline> {
                             _buildTrimHandle(
                               key: const Key('trim-handle-end'),
                               x: trimEndPx,
-                              color: colorScheme.secondary,
+                              color: LiquidGlassRefs.accentOrange,
                               onDragStart: () {
                                 _isDraggingHandle = true;
                               },
@@ -470,7 +469,7 @@ class _TrimTimelineState extends State<TrimTimeline> {
             decoration: BoxDecoration(color: Color(0x22162A3C)),
             child: Center(
               child: Text(
-                'サムネイル生成中...',
+                'サムネイル読み込み中...',
                 style: TextStyle(color: Colors.white70),
               ),
             ),
@@ -498,59 +497,66 @@ class _TrimTimelineState extends State<TrimTimeline> {
           children: widget.thumbnails.map((thumbnail) {
             return SizedBox(
               width: tileWidth,
-              child: DecoratedBox(
-                decoration: const BoxDecoration(color: Colors.black12),
-                child: Center(
-                  child: Image.file(
-                    File(thumbnail.path),
-                    key: ValueKey<String>(thumbnail.path),
-                    fit: BoxFit.contain,
-                    filterQuality: FilterQuality.none,
-                    errorBuilder: (context, error, stackTrace) =>
-                        const ColoredBox(color: Color(0xFF24374B)),
-                  ),
-                ),
+              child: Image.file(
+                File(thumbnail.path),
+                fit: BoxFit.cover,
+                filterQuality: FilterQuality.medium,
+                errorBuilder: (context, error, stackTrace) {
+                  return const ColoredBox(color: Color(0x22000000));
+                },
               ),
             );
-          }).toList(),
+          }).toList(growable: false),
         ),
       ),
     );
+
     _cachedThumbnailStrip = strip;
     _cachedThumbnailSignature = signature;
     _cachedThumbnailTimelineWidth = timelineWidth;
     return strip;
   }
 
-  Widget _buildMarkers(double timelineWidth, double markerStep, double pps) {
-    final markers = <Widget>[];
-    for (double second = 0; second <= _totalSeconds; second += markerStep) {
-      final x = _secondsToPx(second, pps);
-      markers.add(
-        Positioned(
-          left: x,
-          top: 0,
-          bottom: 0,
-          child: Container(
-            width: 1,
-            color: Colors.white.withOpacity(0.22),
-          ),
+  Widget _buildMarkers(
+    double timelineWidth,
+    double markerStep,
+    double pxPerSecond,
+  ) {
+    final markerCount = (_totalSeconds / markerStep).ceil() + 1;
+    final labelStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: Colors.white70,
+          fontSize: 10,
+        );
+
+    return IgnorePointer(
+      child: SizedBox(
+        width: timelineWidth,
+        child: Stack(
+          children: List<Widget>.generate(markerCount, (index) {
+            final seconds = (index * markerStep).clamp(0, _totalSeconds);
+            final x = _secondsToPx(seconds.toDouble(), pxPerSecond);
+            return Positioned(
+              left: x,
+              top: 0,
+              bottom: 0,
+              child: Column(
+                children: <Widget>[
+                  Container(
+                    width: 1,
+                    height: 14,
+                    color: Colors.white24,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _formatSeconds(seconds.toDouble()),
+                    style: labelStyle,
+                  ),
+                ],
+              ),
+            );
+          }),
         ),
-      );
-      markers.add(
-        Positioned(
-          left: x + 3,
-          bottom: 4,
-          child: Text(
-            '${second.toStringAsFixed(second % 1 == 0 ? 0 : 1)}s',
-            style: const TextStyle(fontSize: 10),
-          ),
-        ),
-      );
-    }
-    return SizedBox(
-      width: timelineWidth,
-      child: Stack(children: markers),
+      ),
     );
   }
 
@@ -558,39 +564,30 @@ class _TrimTimelineState extends State<TrimTimeline> {
     required Key key,
     required double x,
     required Color color,
-    VoidCallback? onDragStart,
+    required VoidCallback onDragStart,
     required ValueChanged<double> onDrag,
-    VoidCallback? onDragEnd,
+    required VoidCallback onDragEnd,
   }) {
     return Positioned(
-      left: x - 8,
+      left: x - 7,
       top: 0,
       bottom: 0,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.resizeLeftRight,
-        child: GestureDetector(
-          key: key,
-          behavior: HitTestBehavior.translucent,
-          onHorizontalDragStart: (_) => onDragStart?.call(),
-          onHorizontalDragUpdate: (details) => onDrag(details.delta.dx),
-          onHorizontalDragCancel: () => onDragEnd?.call(),
-          onHorizontalDragEnd: (_) => onDragEnd?.call(),
-          child: SizedBox(
-            width: 16,
-            child: Center(
-              child: Container(
-                width: 4,
-                height: 86,
-                decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: <BoxShadow>[
-                    BoxShadow(
-                      color: color.withOpacity(0.32),
-                      blurRadius: 12,
-                    ),
-                  ],
-                ),
+      child: GestureDetector(
+        key: key,
+        behavior: HitTestBehavior.translucent,
+        onHorizontalDragStart: (_) => onDragStart(),
+        onHorizontalDragUpdate: (details) => onDrag(details.delta.dx),
+        onHorizontalDragEnd: (_) => onDragEnd(),
+        onHorizontalDragCancel: onDragEnd,
+        child: SizedBox(
+          width: 14,
+          child: Center(
+            child: Container(
+              width: 4,
+              height: 44,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(999),
               ),
             ),
           ),
@@ -599,16 +596,29 @@ class _TrimTimelineState extends State<TrimTimeline> {
     );
   }
 
-  double _secondsToPx(double seconds, double pps) => seconds * pps;
+  double _secondsToPx(double seconds, double pxPerSecond) {
+    return seconds.clamp(0.0, _totalSeconds) * pxPerSecond;
+  }
 
-  double _pxToSeconds(double px, double pps) =>
-      (px / pps).clamp(0.0, _totalSeconds);
+  double _pxToSeconds(double px, double pxPerSecond) {
+    if (pxPerSecond <= 0) return 0;
+    return (px / pxPerSecond).clamp(0.0, _totalSeconds).toDouble();
+  }
 
-  double _resolveMarkerStep(double pps) {
-    if (pps >= 260) return 0.25;
-    if (pps >= 170) return 0.5;
-    if (pps >= 90) return 1;
-    if (pps >= 50) return 2;
-    return 5;
+  double _resolveMarkerStep(double pxPerSecond) {
+    const candidates = <double>[0.5, 1, 2, 5, 10, 15, 30, 60];
+    for (final candidate in candidates) {
+      if (candidate * pxPerSecond >= 56) {
+        return candidate;
+      }
+    }
+    return 60;
+  }
+
+  String _formatSeconds(double seconds) {
+    final total = seconds.round();
+    final minutes = total ~/ 60;
+    final remain = total % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${remain.toString().padLeft(2, '0')}';
   }
 }

@@ -27,6 +27,49 @@ Windows/macOS を主対象にした GUI ベースのループ動画編集アプ�
    - 本体未起動時/起動済み時の双方で共有動画を編集画面へ引き渡し
 - Windows MSIX 開発用インストールスクリプト
 
+## Liquid Glass 実装メモ（Windows安定化）
+
+### 躓きポイント（再発しやすい実装矛盾）
+
+1. `LiquidGlass` のスコープ不足  
+   - `LiquidGlass.grouped` は必ず `LiquidGlassLayer` + `LiquidGlassBlendGroup` 配下で使う。  
+   - 単体ボタンは `LiquidGlass.withOwnLayer` を使う（Layerなしで `LiquidGlass` を直接置かない）。
+2. grouped / non-grouped の混在  
+   - 同じまとまりで「くっつき」を狙う要素は grouped で統一する。  
+   - くっつかせない要素は `withOwnLayer` 側に分離する。
+3. Windowsでの過剰エフェクト  
+   - `thickness/blur/stretch/interactionScale` を他OSと同じ強さにすると、描画負荷よりも実装相性で不安定化しやすい。  
+   - Windows専用値は `lib/src/ui/liquid_glass/liquid_glass_refs.dart` の `*Windows` 定数で管理する。
+4. 動画プレビューまわりの競合  
+   - `media_kit_video` の `Video` は `fill` を明示し、余白色をアプリ背景と揃える。  
+   - プレビューで問題が出た場合は、`InteractiveViewer` や過剰アニメーションを先に疑う。
+5. 変更後の確認不足  
+   - 液体表現を触った後は最低限 `flutter analyze` + 関連 `flutter test` を実行する。  
+   - 特に `Editor` 遷移直後（Import -> Editor）を実機で確認する。
+
+### デバッグ順序（フリーズ時）
+
+1. 直近で追加した `LiquidGlass` ノードが `Layer` 配下か確認  
+2. grouped 要素が `LiquidGlassBlendGroup` 内か確認  
+3. Windows専用パラメータを一段弱める（`blur/stretch` 優先）  
+4. それでも不安定なら、該当要素だけ一時的に `withOwnLayer` の単体表現に戻す
+
+## UIデザインルール（.pen反映の実装規約）
+
+1. トークン一元管理  
+   - 色・Liquidパラメータは `LiquidGlassRefs` に集約し、画面側で直書きしない。
+2. レイアウト優先順位  
+   - `Preview / Timeline / Control` を別グループで扱う。  
+   - `Timeline` と `Control` は固定高、余剰高さは `Preview` に優先配分する。
+3. プレビュー余白の見え方  
+   - 動画アスペクト外余白は黒帯にしない。  
+   - `Video.fill` と外側背景を同系色（原則 `editorBgBase`）に揃える。
+4. .pen注記の扱い  
+   - `.pen` の「Implementation Notes」は設計メモであり、ランタイムUIには表示しない。
+5. 新規Liquid UI追加時  
+   - 既存の共通部品（`InteractiveLiquidGlassIconButton` / `LiquidGlassActionButton`）を優先利用する。  
+   - 個別実装が必要でも、最終的に `refs` 管理へ寄せる。
+
 ### 未実装 / 制約（残タスク）
 
 1. GIF品質パラメータのUI化（fps / scale / palette戦略）
@@ -184,7 +227,6 @@ ios/
 ## 今後の進め方（実装ロードマップ）
 
 1. iOS書き出し方式のPoC（2案以上）と比較結果確定（※ いきなり本実装へ進まず、1機能ずつ段階導入して安定性を確認）
-2. GIF品質プリセットUI（※ iOS書き出し方式確定後に着手し、依存仕様の手戻りを避ける）
 3. 配布運用ドキュメント完成（証明書更新、バージョニング）（※ Extension追加後の署名手順差分も反映）
 4. CIで `analyze/test/build` 自動化（※ iOS実機テストは手動ゲートを残しつつ徐々に自動化）
 

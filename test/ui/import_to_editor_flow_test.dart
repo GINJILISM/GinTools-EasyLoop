@@ -8,8 +8,8 @@ void main() {
       MaterialApp(home: ImportScreen(onVideoSelected: (_) {})),
     );
 
-    expect(find.text('動画をここへドロップ'), findsOneWidget);
-    expect(find.text('ファイルを開く'), findsOneWidget);
-    expect(find.text('ライブラリを開く'), findsOneWidget);
+    expect(find.text('編集する動画を選択'), findsOneWidget);
+    expect(find.text('ファイルから開く'), findsOneWidget);
+    expect(find.text('ライブラリから開く'), findsOneWidget);
   });
 }

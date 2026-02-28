@@ -24,10 +24,14 @@ import '../../services/file_import_service.dart';
 import '../../services/output_file_naming_service.dart';
 import '../../services/timeline_thumbnail_service.dart';
 import '../../state/editor_controller.dart';
+import '../liquid_glass/liquid_glass_refs.dart';
 import '../widgets/editor_shell.dart';
+import '../widgets/interactive_liquid_glass_icon_button.dart';
+import '../widgets/liquid_glass_action_button.dart';
 import '../widgets/playback_transport_bar.dart';
 import '../widgets/preview_stage.dart';
 import '../widgets/replace_input_dialog.dart';
+import '../widgets/loop_mode_glass_tabs.dart';
 import '../widgets/timeline_zoom_bar.dart';
 import '../widgets/trim_timeline.dart';
 
@@ -174,7 +178,10 @@ class _EditorScreenState extends State<EditorScreen> {
       }
 
       final currentSeconds = position.inMilliseconds / 1000;
-      if ((currentSeconds - _playheadNotifier.value).abs() > 0.06) {
+      final playheadDeltaThreshold =
+          LiquidGlassRefs.isWindowsPlatform ? 0.14 : 0.06;
+      if ((currentSeconds - _playheadNotifier.value).abs() >
+          playheadDeltaThreshold) {
         _playheadNotifier.value = currentSeconds;
       }
 
@@ -221,13 +228,13 @@ class _EditorScreenState extends State<EditorScreen> {
           reachedSeconds >= trimStart + EditorController.minTrimLengthSeconds &&
           reachedSeconds <
               trimEnd - EditorController.autoTrimAdjustEpsilonSeconds) {
-        final adjustedEnd = (reachedSeconds -
-                EditorController.defaultTrimEndOffsetSeconds)
-            .clamp(
-              trimStart + EditorController.minTrimLengthSeconds,
-              trimEnd,
-            )
-            .toDouble();
+        final adjustedEnd =
+            (reachedSeconds - EditorController.defaultTrimEndOffsetSeconds)
+                .clamp(
+                  trimStart + EditorController.minTrimLengthSeconds,
+                  trimEnd,
+                )
+                .toDouble();
         _editorController.setAutoDetectedTrimEnd(adjustedEnd);
       }
 
@@ -241,7 +248,6 @@ class _EditorScreenState extends State<EditorScreen> {
       await _restartForwardLoop(trimStart);
     });
   }
-
 
   Future<void> _handleOpenFromAppBar({required bool fromLibrary}) async {
     if (_editorController.isExporting || _editorController.isFrameExporting) {
@@ -272,13 +278,16 @@ class _EditorScreenState extends State<EditorScreen> {
 
     try {
       _beginSlowOpenIndicatorWatch();
-      debugPrint('[EditorInit] player.open start: ${initializeTimer.elapsedMilliseconds}ms');
+      debugPrint(
+          '[EditorInit] player.open start: ${initializeTimer.elapsedMilliseconds}ms');
       await _player.open(Media(widget.inputPath));
-      debugPrint('[EditorInit] player.open done: ${initializeTimer.elapsedMilliseconds}ms');
+      debugPrint(
+          '[EditorInit] player.open done: ${initializeTimer.elapsedMilliseconds}ms');
       await _player.seek(Duration.zero);
       await _player.play();
       _scheduleThumbnailBuild(force: true);
-      debugPrint('[EditorInit] first playback started: ${initializeTimer.elapsedMilliseconds}ms');
+      debugPrint(
+          '[EditorInit] first playback started: ${initializeTimer.elapsedMilliseconds}ms');
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -524,8 +533,9 @@ class _EditorScreenState extends State<EditorScreen> {
     }
 
     try {
-      final runQuickPass =
-          _isMobilePlatform && !_quickThumbnailPhaseCompleted && _thumbnails.isEmpty;
+      final runQuickPass = _isMobilePlatform &&
+          !_quickThumbnailPhaseCompleted &&
+          _thumbnails.isEmpty;
       final thumbnails = await _thumbnailService.buildStrip(
         inputPath: widget.inputPath,
         duration: _editorController.totalDuration,
@@ -1048,7 +1058,9 @@ class _EditorScreenState extends State<EditorScreen> {
       if (!isSuccess) {
         throw Exception('保存に失敗しました。');
       }
-      messenger.showSnackBar(_buildPhotoLibrarySavedSnackBar('フレーム画像をフォトライブラリに保存しました。'));
+      messenger.showSnackBar(
+        _buildPhotoLibrarySavedSnackBar('フレーム画像をフォトライブラリに保存しました。'),
+      );
       return true;
     } catch (error) {
       messenger.showSnackBar(
@@ -1083,13 +1095,15 @@ class _EditorScreenState extends State<EditorScreen> {
         throw Exception('保存に失敗しました。');
       }
       messenger.showSnackBar(
-        _buildPhotoLibrarySavedSnackBar('$formatLabel を写真ライブラリに保存しました。'),
+        _buildPhotoLibrarySavedSnackBar(
+          '$formatLabel をフォトライブラリに保存しました。',
+        ),
       );
       return true;
     } catch (error) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text('写真ライブラリ保存に失敗しました: $error'),
+          content: Text('フォトライブラリ保存に失敗しました: $error'),
           behavior: _snackBarBehavior,
         ),
       );
@@ -1153,7 +1167,7 @@ class _EditorScreenState extends State<EditorScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('写真ライブラリアプリを開けませんでした。'),
+          content: Text('フォトライブラリアプリを開けませんでした。'),
           behavior: _snackBarBehavior,
         ),
       );
@@ -1226,7 +1240,7 @@ class _EditorScreenState extends State<EditorScreen> {
     }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('保存先パスを設定してください。'),
+        content: Text('書き出し先パスを設定してください。'),
         behavior: _snackBarBehavior,
       ),
     );
@@ -1266,14 +1280,41 @@ class _EditorScreenState extends State<EditorScreen> {
       value: _editorController,
       child: Consumer<EditorController>(
         builder: (context, controller, child) {
-          return ValueListenableBuilder<double>(
+          final transportOverlay = PlaybackTransportBar(
+            isPlaying: _isPlaybackActive,
+            isDisabled: controller.isExporting ||
+                controller.totalDuration <= Duration.zero,
+            onSetStart: () {
+              unawaited(_setTrimBoundaryAtPlayhead(isStart: true));
+            },
+            onJumpStart: () {
+              unawaited(_jumpToTrimStart());
+            },
+            onStepPrev: () {
+              unawaited(_stepFrame(forward: false));
+            },
+            onPlayPause: () {
+              unawaited(_togglePlayPause());
+            },
+            onStepNext: () {
+              unawaited(_stepFrame(forward: true));
+            },
+            onJumpEnd: () {
+              unawaited(_jumpToTrimEnd());
+            },
+            onSetEnd: () {
+              unawaited(_setTrimBoundaryAtPlayhead(isStart: false));
+            },
+          );
+          final controlsPanel = _buildControlPanel(context, controller);
+          final shell = ValueListenableBuilder<double>(
             valueListenable: _playheadNotifier,
             builder: (context, playheadSeconds, _) {
               final playheadDuration = Duration(
                 milliseconds: (playheadSeconds * 1000).round(),
               );
 
-              Widget shell = EditorShell(
+              final content = EditorShell(
                 title: p.basename(widget.inputPath),
                 onImportDefaultRequested: () {
                   unawaited(
@@ -1298,7 +1339,7 @@ class _EditorScreenState extends State<EditorScreen> {
                   centerOverlay: _isSlowOpeningVisible
                       ? DecoratedBox(
                           decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.56),
+                            color: Colors.black.withValues(alpha: 0.56),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Padding(
@@ -1317,39 +1358,13 @@ class _EditorScreenState extends State<EditorScreen> {
                                   ),
                                 ),
                                 SizedBox(width: 10),
-                                Text('iCloudから動画を読み込み中…'),
+                                Text('iCloud から動画を読み込み中...'),
                               ],
                             ),
                           ),
                         )
                       : null,
-                  bottomOverlay: PlaybackTransportBar(
-                    isPlaying: _isPlaybackActive,
-                    isDisabled:
-                        controller.isExporting ||
-                        controller.totalDuration <= Duration.zero,
-                    onSetStart: () {
-                      unawaited(_setTrimBoundaryAtPlayhead(isStart: true));
-                    },
-                    onJumpStart: () {
-                      unawaited(_jumpToTrimStart());
-                    },
-                    onStepPrev: () {
-                      unawaited(_stepFrame(forward: false));
-                    },
-                    onPlayPause: () {
-                      unawaited(_togglePlayPause());
-                    },
-                    onStepNext: () {
-                      unawaited(_stepFrame(forward: true));
-                    },
-                    onJumpEnd: () {
-                      unawaited(_jumpToTrimEnd());
-                    },
-                    onSetEnd: () {
-                      unawaited(_setTrimBoundaryAtPlayhead(isStart: false));
-                    },
-                  ),
+                  bottomOverlay: transportOverlay,
                 ),
                 timeline: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1364,8 +1379,8 @@ class _EditorScreenState extends State<EditorScreen> {
                         totalDuration: controller.hasUserEditedTrim
                             ? controller.totalDuration
                             : Duration(
-                                milliseconds: (controller.trimEndSeconds * 1000)
-                                    .round(),
+                                milliseconds:
+                                    (controller.trimEndSeconds * 1000).round(),
                               ),
                         trimStartSeconds: controller.trimStartSeconds,
                         trimEndSeconds: controller.trimEndSeconds,
@@ -1386,12 +1401,10 @@ class _EditorScreenState extends State<EditorScreen> {
                           }
                           unawaited(_seekTo(seconds));
                         },
-                        onScrubStart: controller.isExporting
-                            ? null
-                            : _handleScrubStart,
-                        onScrubUpdate: controller.isExporting
-                            ? null
-                            : _handleScrubUpdate,
+                        onScrubStart:
+                            controller.isExporting ? null : _handleScrubStart,
+                        onScrubUpdate:
+                            controller.isExporting ? null : _handleScrubUpdate,
                         onScrubEnd: controller.isExporting
                             ? null
                             : (seconds) {
@@ -1421,7 +1434,7 @@ class _EditorScreenState extends State<EditorScreen> {
                     const SizedBox(height: 8),
                     if (_isMobilePlatform)
                       Text(
-                        'タイムライン: 2本指ピンチで倍率変更 / 2本指スライドで左右移動',
+                        'タイムライン: 2本指ピンチで拡大縮小 / 2本指スライドで左右スクロール',
                         style: Theme.of(context).textTheme.bodySmall,
                       )
                     else
@@ -1433,28 +1446,26 @@ class _EditorScreenState extends State<EditorScreen> {
                       ),
                   ],
                 ),
-                controls: _buildControlPanel(context, controller),
+                controls: controlsPanel,
               );
 
-              if (_supportsDesktopDrop) {
-                shell = DropTarget(
-                  onDragEntered: (_) =>
-                      setState(() => _isDraggingReplace = true),
-                  onDragExited: (_) =>
-                      setState(() => _isDraggingReplace = false),
-                  onDragDone: (details) async {
-                    setState(() => _isDraggingReplace = false);
-                    if (details.files.isEmpty) {
-                      return;
-                    }
-                    await _handleDropReplace(details.files.first.path);
-                  },
-                  child: shell,
-                );
-              }
-
-              return shell;
+              return content;
             },
+          );
+          if (!_supportsDesktopDrop) {
+            return shell;
+          }
+          return DropTarget(
+            onDragEntered: (_) => setState(() => _isDraggingReplace = true),
+            onDragExited: (_) => setState(() => _isDraggingReplace = false),
+            onDragDone: (details) async {
+              setState(() => _isDraggingReplace = false);
+              if (details.files.isEmpty) {
+                return;
+              }
+              await _handleDropReplace(details.files.first.path);
+            },
+            child: shell,
           );
         },
       ),
@@ -1477,219 +1488,296 @@ class _EditorScreenState extends State<EditorScreen> {
       await showDialog<void>(
         context: context,
         builder: (context) {
-          return StatefulBuilder(
-            builder: (context, setModalState) {
-              return AlertDialog(
-                title: const Text('書き出し設定'),
-                content: SizedBox(
-                  width: 540,
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        DropdownButtonFormField<ExportFormat>(
-                          initialValue: controller.exportFormat,
-                          decoration: const InputDecoration(
-                            labelText: '書き出し形式',
-                          ),
-                          items: ExportFormat.values
-                              .map(
-                                (format) => DropdownMenuItem<ExportFormat>(
-                                  value: format,
-                                  child: Text(format.label),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) {
-                            if (value == null) return;
-                            controller.setExportFormat(value);
-                            _schedulePersistExportSettings();
-                            setModalState(() {});
-                            if (mounted) setState(() {});
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        if (controller.exportFormat ==
-                            ExportFormat.mp4) ...<Widget>[
-                          const Text('ループ回数'),
-                          Slider(
-                            value: controller.loopCount.toDouble(),
-                            min: 1,
-                            max: 20,
-                            divisions: 19,
-                            label: '${controller.loopCount}',
-                            onChanged: (value) {
-                              controller.setLoopCount(value.round());
-                              _schedulePersistExportSettings();
-                              setModalState(() {});
-                              if (mounted) setState(() {});
-                            },
-                          ),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: Text('${controller.loopCount}回'),
-                          ),
-                        ],
-                        const Divider(height: 24),
-                        DropdownButtonFormField<GifQualityPreset>(
-                          initialValue: controller.gifQualityPreset,
-                          decoration: const InputDecoration(labelText: 'GIF画質'),
-                          items: GifQualityPreset.values
-                              .map(
-                                (preset) => DropdownMenuItem<GifQualityPreset>(
-                                  value: preset,
-                                  child: Text(preset.label),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) {
-                            if (value == null) return;
-                            controller.setGifQualityPreset(value);
-                            _schedulePersistExportSettings();
-                            setModalState(() {});
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<GifFpsPreset>(
-                          initialValue: controller.gifFpsPreset,
-                          decoration: const InputDecoration(
-                            labelText: 'GIF FPS',
-                          ),
-                          items: GifFpsPreset.values
-                              .map(
-                                (preset) => DropdownMenuItem<GifFpsPreset>(
-                                  value: preset,
-                                  child: Text(preset.label),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) {
-                            if (value == null) return;
-                            controller.setGifFpsPreset(value);
-                            _schedulePersistExportSettings();
-                            setModalState(() {});
-                          },
-                        ),
-                        const Divider(height: 24),
-                        TextFormField(
-                          key: const Key('output-name-template-field'),
-                          controller: templateController,
-                          decoration: const InputDecoration(
-                            labelText: '保存ファイル名テンプレート（共通）',
-                            border: OutlineInputBorder(),
-                          ),
-                          onChanged: (value) {
-                            _outputNameTemplate = value;
-                            _schedulePersistExportSettings();
-                            setModalState(() {});
-                          },
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '使える変数: {looptype}, {filename}\n'
-                          '例: {looptype}_{filename}\n'
-                          '展開例: loop_sample.mp4 / pingpongLoop_sample.gif / snapshot_sample.jpg',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        const Divider(height: 24),
-                        _buildPathSettingRow(
-                          fieldKey: const Key('image-export-path-field'),
-                          label: '画像書き出しパス',
-                          controller: imagePathController,
-                          enabled: !(_isMobilePlatform && _saveToPhotoLibrary),
-                          onChanged: (value) {
-                            _imageExportDirectory = _normalizeDirectory(value);
-                            _schedulePersistExportSettings();
-                          },
-                          onPick: () async {
-                            final selected = await _selectDirectory(
-                              '画像保存先フォルダを選択',
-                            );
-                            if (selected == null) {
-                              return;
-                            }
-                            imagePathController.text = selected;
-                            _imageExportDirectory = selected;
-                            _schedulePersistExportSettings();
-                            setModalState(() {});
-                            if (mounted) setState(() {});
-                          },
-                        ),
-                        const SizedBox(height: 8),
-                        _buildPathSettingRow(
-                          fieldKey: const Key('video-export-path-field'),
-                          label: '動画書き出しパス',
-                          controller: videoPathController,
-                          enabled: !(_isMobilePlatform && _saveToPhotoLibrary),
-                          onChanged: (value) {
-                            _videoExportDirectory = _normalizeDirectory(value);
-                            _schedulePersistExportSettings();
-                          },
-                          onPick: () async {
-                            final selected = await _selectDirectory(
-                              '動画保存先フォルダを選択',
-                            );
-                            if (selected == null) {
-                              return;
-                            }
-                            videoPathController.text = selected;
-                            _videoExportDirectory = selected;
-                            _schedulePersistExportSettings();
-                            setModalState(() {});
-                            if (mounted) setState(() {});
-                          },
-                        ),
-                        const SizedBox(height: 8),
-                        _buildPathSettingRow(
-                          fieldKey: const Key('gif-export-path-field'),
-                          label: 'GIF書き出しパス',
-                          controller: gifPathController,
-                          enabled: !(_isMobilePlatform && _saveToPhotoLibrary),
-                          onChanged: (value) {
-                            _gifExportDirectory = _normalizeDirectory(value);
-                            _schedulePersistExportSettings();
-                          },
-                          onPick: () async {
-                            final selected = await _selectDirectory(
-                              'GIF保存先フォルダを選択',
-                            );
-                            if (selected == null) {
-                              return;
-                            }
-                            gifPathController.text = selected;
-                            _gifExportDirectory = selected;
-                            _schedulePersistExportSettings();
-                            setModalState(() {});
-                            if (mounted) setState(() {});
-                          },
-                        ),
-                        if (_isMobilePlatform) ...<Widget>[
-                          const Divider(height: 24),
-                          SwitchListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('写真ライブラリに直接保存'),
-                            value: _saveToPhotoLibrary,
-                            onChanged: (value) {
-                              _saveToPhotoLibrary = value;
-                              _schedulePersistExportSettings();
-                              setModalState(() {});
-                              if (mounted) setState(() {});
-                            },
-                          ),
-                        ],
-                      ],
-                    ),
+          final theme = Theme.of(context);
+          final baseBorder = OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: LiquidGlassRefs.outlineSoft),
+          );
+
+          return Theme(
+            data: theme.copyWith(
+              dividerColor: LiquidGlassRefs.outlineSoft,
+              iconTheme: theme.iconTheme
+                  .copyWith(color: LiquidGlassRefs.textSecondary),
+              inputDecorationTheme: theme.inputDecorationTheme.copyWith(
+                filled: true,
+                fillColor: LiquidGlassRefs.surfaceDeep.withValues(alpha: 0.52),
+                labelStyle:
+                    const TextStyle(color: LiquidGlassRefs.textSecondary),
+                hintStyle: TextStyle(
+                  color: LiquidGlassRefs.textSecondary.withValues(alpha: 0.75),
+                ),
+                border: baseBorder,
+                enabledBorder: baseBorder,
+                focusedBorder: baseBorder.copyWith(
+                  borderSide: const BorderSide(
+                    color: LiquidGlassRefs.accentBlue,
+                    width: 1.4,
                   ),
                 ),
-                actions: <Widget>[
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('閉じる'),
+                disabledBorder: baseBorder.copyWith(
+                  borderSide: BorderSide(
+                    color: LiquidGlassRefs.outlineSoft.withValues(alpha: 0.55),
                   ),
-                ],
-              );
-            },
+                ),
+              ),
+              textButtonTheme: TextButtonThemeData(
+                style: TextButton.styleFrom(
+                  foregroundColor: LiquidGlassRefs.accentBlue,
+                ),
+              ),
+              outlinedButtonTheme: OutlinedButtonThemeData(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: LiquidGlassRefs.accentBlue,
+                  backgroundColor:
+                      LiquidGlassRefs.surfaceDeep.withValues(alpha: 0.46),
+                  side: const BorderSide(color: LiquidGlassRefs.outlineSoft),
+                ),
+              ),
+              filledButtonTheme: FilledButtonThemeData(
+                style: FilledButton.styleFrom(
+                  backgroundColor: LiquidGlassRefs.accentBlue,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
+            child: StatefulBuilder(
+              builder: (context, setModalState) {
+                return AlertDialog(
+                  backgroundColor:
+                      LiquidGlassRefs.surfaceDeep.withValues(alpha: 0.96),
+                  surfaceTintColor: Colors.transparent,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(28),
+                    side: const BorderSide(color: LiquidGlassRefs.outlineSoft),
+                  ),
+                  titleTextStyle:
+                      Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            color: LiquidGlassRefs.textPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                  contentTextStyle:
+                      Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: LiquidGlassRefs.textPrimary,
+                          ),
+                  title: const Text('書き出し設定'),
+                  content: SizedBox(
+                    width: 540,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          DropdownButtonFormField<ExportFormat>(
+                            initialValue: controller.exportFormat,
+                            decoration: const InputDecoration(
+                              labelText: '書き出し形式',
+                            ),
+                            items: ExportFormat.values
+                                .map(
+                                  (format) => DropdownMenuItem<ExportFormat>(
+                                    value: format,
+                                    child: Text(format.label),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) {
+                              if (value == null) return;
+                              controller.setExportFormat(value);
+                              _schedulePersistExportSettings();
+                              setModalState(() {});
+                              if (mounted) setState(() {});
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          if (controller.exportFormat ==
+                              ExportFormat.mp4) ...<Widget>[
+                            const Text('ループ回数'),
+                            Slider(
+                              value: controller.loopCount.toDouble(),
+                              min: 1,
+                              max: 20,
+                              divisions: 19,
+                              label: '${controller.loopCount}',
+                              onChanged: (value) {
+                                controller.setLoopCount(value.round());
+                                _schedulePersistExportSettings();
+                                setModalState(() {});
+                                if (mounted) setState(() {});
+                              },
+                            ),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Text('${controller.loopCount}回'),
+                            ),
+                          ],
+                          const Divider(height: 24),
+                          DropdownButtonFormField<GifQualityPreset>(
+                            initialValue: controller.gifQualityPreset,
+                            decoration:
+                                const InputDecoration(labelText: 'GIF品質'),
+                            items: GifQualityPreset.values
+                                .map(
+                                  (preset) =>
+                                      DropdownMenuItem<GifQualityPreset>(
+                                    value: preset,
+                                    child: Text(preset.label),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) {
+                              if (value == null) return;
+                              controller.setGifQualityPreset(value);
+                              _schedulePersistExportSettings();
+                              setModalState(() {});
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<GifFpsPreset>(
+                            initialValue: controller.gifFpsPreset,
+                            decoration: const InputDecoration(
+                              labelText: 'GIF FPS',
+                            ),
+                            items: GifFpsPreset.values
+                                .map(
+                                  (preset) => DropdownMenuItem<GifFpsPreset>(
+                                    value: preset,
+                                    child: Text(preset.label),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) {
+                              if (value == null) return;
+                              controller.setGifFpsPreset(value);
+                              _schedulePersistExportSettings();
+                              setModalState(() {});
+                            },
+                          ),
+                          const Divider(height: 24),
+                          TextFormField(
+                            key: const Key('output-name-template-field'),
+                            controller: templateController,
+                            decoration: const InputDecoration(
+                              labelText: '書き出しファイル名テンプレート（拡張子なし）',
+                              border: OutlineInputBorder(),
+                            ),
+                            onChanged: (value) {
+                              _outputNameTemplate = value;
+                              _schedulePersistExportSettings();
+                              setModalState(() {});
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '使用できる変数: {looptype}, {filename}\n'
+                            '例: {looptype}_{filename}\n'
+                            '出力例: loop_sample.mp4 / pingpongLoop_sample.gif / snapshot_sample.jpg',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          const Divider(height: 24),
+                          _buildPathSettingRow(
+                            fieldKey: const Key('image-export-path-field'),
+                            label: '画像書き出しパス',
+                            controller: imagePathController,
+                            enabled:
+                                !(_isMobilePlatform && _saveToPhotoLibrary),
+                            onChanged: (value) {
+                              _imageExportDirectory =
+                                  _normalizeDirectory(value);
+                              _schedulePersistExportSettings();
+                            },
+                            onPick: () async {
+                              final selected = await _selectDirectory(
+                                '画像書き出しフォルダを選択',
+                              );
+                              if (selected == null) {
+                                return;
+                              }
+                              imagePathController.text = selected;
+                              _imageExportDirectory = selected;
+                              _schedulePersistExportSettings();
+                              setModalState(() {});
+                              if (mounted) setState(() {});
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                          _buildPathSettingRow(
+                            fieldKey: const Key('video-export-path-field'),
+                            label: '動画書き出しパス',
+                            controller: videoPathController,
+                            enabled:
+                                !(_isMobilePlatform && _saveToPhotoLibrary),
+                            onChanged: (value) {
+                              _videoExportDirectory =
+                                  _normalizeDirectory(value);
+                              _schedulePersistExportSettings();
+                            },
+                            onPick: () async {
+                              final selected = await _selectDirectory(
+                                '動画書き出しフォルダを選択',
+                              );
+                              if (selected == null) {
+                                return;
+                              }
+                              videoPathController.text = selected;
+                              _videoExportDirectory = selected;
+                              _schedulePersistExportSettings();
+                              setModalState(() {});
+                              if (mounted) setState(() {});
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                          _buildPathSettingRow(
+                            fieldKey: const Key('gif-export-path-field'),
+                            label: 'GIF書き出しパス',
+                            controller: gifPathController,
+                            enabled:
+                                !(_isMobilePlatform && _saveToPhotoLibrary),
+                            onChanged: (value) {
+                              _gifExportDirectory = _normalizeDirectory(value);
+                              _schedulePersistExportSettings();
+                            },
+                            onPick: () async {
+                              final selected = await _selectDirectory(
+                                'GIF書き出しフォルダを選択',
+                              );
+                              if (selected == null) {
+                                return;
+                              }
+                              gifPathController.text = selected;
+                              _gifExportDirectory = selected;
+                              _schedulePersistExportSettings();
+                              setModalState(() {});
+                              if (mounted) setState(() {});
+                            },
+                          ),
+                          if (_isMobilePlatform) ...<Widget>[
+                            const Divider(height: 24),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text('フォトライブラリに直接保存'),
+                              value: _saveToPhotoLibrary,
+                              onChanged: (value) {
+                                _saveToPhotoLibrary = value;
+                                _schedulePersistExportSettings();
+                                setModalState(() {});
+                                if (mounted) setState(() {});
+                              },
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  actions: <Widget>[
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('閉じる'),
+                    ),
+                  ],
+                );
+              },
+            ),
           );
         },
       );
@@ -1720,7 +1808,7 @@ class _EditorScreenState extends State<EditorScreen> {
             decoration: InputDecoration(
               labelText: label,
               border: const OutlineInputBorder(),
-              hintText: enabled ? '保存先パスを入力' : '写真ライブラリ保存時は不要',
+              hintText: enabled ? '書き出し先パスを入力' : 'フォトライブラリ保存時は不要',
             ),
           ),
         ),
@@ -1734,8 +1822,7 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Widget _buildControlPanel(BuildContext context, EditorController controller) {
-    final exportActionDisabled =
-        controller.isExporting ||
+    final exportActionDisabled = controller.isExporting ||
         controller.isFrameExporting ||
         controller.totalDuration <= Duration.zero;
     final isMobile = _isMobilePlatform;
@@ -1748,40 +1835,15 @@ class _EditorScreenState extends State<EditorScreen> {
           spacing: 8,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: <Widget>[
-            SegmentedButton<LoopMode>(
-              style: isMobile
-                  ? const ButtonStyle(
-                      visualDensity: VisualDensity.compact,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    )
-                  : null,
-              segments: LoopMode.values
-                  .map(
-                    (mode) => ButtonSegment<LoopMode>(
-                      value: mode,
-                      label: Text(mode.label),
-                    ),
-                  )
-                  .toList(),
-              selected: <LoopMode>{controller.loopMode},
-              onSelectionChanged: exportActionDisabled
-                  ? null
-                  : (selection) => controller.setLoopMode(selection.first),
-            ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                const Text('\u7BC4\u56F2\u30EB\u30FC\u30D7'),
-                Switch(
-                  value: controller.isAutoLoopEnabled,
-                  materialTapTargetSize: isMobile
-                      ? MaterialTapTargetSize.shrinkWrap
-                      : MaterialTapTargetSize.padded,
-                  onChanged: exportActionDisabled
-                      ? null
-                      : controller.setAutoLoopEnabled,
-                ),
-              ],
+            LoopModeGlassTabs(
+              width: isMobile
+                  ? LiquidGlassRefs.loopTabsMobileWidth
+                  : LiquidGlassRefs.loopTabsDesktopWidth,
+              loopMode: controller.loopMode,
+              isAutoLoopEnabled: controller.isAutoLoopEnabled,
+              enabled: !exportActionDisabled,
+              onLoopModeChanged: controller.setLoopMode,
+              onAutoLoopChanged: controller.setAutoLoopEnabled,
             ),
           ],
         ),
@@ -1789,7 +1851,10 @@ class _EditorScreenState extends State<EditorScreen> {
         Row(
           children: <Widget>[
             Expanded(
-              child: OutlinedButton.icon(
+              child: LiquidGlassActionButton.icon(
+                fillColor: LiquidGlassRefs.accentOrange.withValues(alpha: 0.5),
+                foregroundColor: LiquidGlassRefs.textPrimary,
+                borderColor: const Color.fromARGB(102, 0, 0, 0),
                 style: isMobile
                     ? const ButtonStyle(
                         visualDensity: VisualDensity.compact,
@@ -1805,9 +1870,13 @@ class _EditorScreenState extends State<EditorScreen> {
                 ),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: LiquidGlassRefs.exportButtonGap),
             Expanded(
-              child: FilledButton.icon(
+              child: LiquidGlassActionButton.icon(
+                primary: true,
+                fillColor: LiquidGlassRefs.accentOrange,
+                foregroundColor: Colors.white,
+                borderColor: const Color(0x66CFE9FF),
                 style: isMobile
                     ? const ButtonStyle(
                         visualDensity: VisualDensity.compact,
@@ -1821,13 +1890,16 @@ class _EditorScreenState extends State<EditorScreen> {
                 label: const Text('書き出し'),
               ),
             ),
-            const SizedBox(width: 8),
-            IconButton(
+            const SizedBox(width: LiquidGlassRefs.exportButtonGap),
+            InteractiveLiquidGlassIconButton(
+              buttonKey: const Key('export-settings-button'),
+              icon: Icons.settings,
               tooltip: '書き出し設定',
-              onPressed: exportActionDisabled
-                  ? null
-                  : () => _showExportSettingsModal(controller),
-              icon: const Icon(Icons.settings),
+              isDisabled: exportActionDisabled,
+              onPressed: () => _showExportSettingsModal(controller),
+              useLiquidGlass: LiquidGlassRefs.supportsLiquidGlass,
+              backgroundColor: Colors.white.withValues(alpha: 0.15),
+              foregroundColor: LiquidGlassRefs.textSecondary,
             ),
           ],
         ),
@@ -1843,7 +1915,7 @@ class _EditorScreenState extends State<EditorScreen> {
           const SizedBox(height: 6),
           Text(
             controller.isFrameExporting
-                ? '\u30D5\u30EC\u30FC\u30E0\u753B\u50CF\u3092\u66F8\u304D\u51FA\u3057\u4E2D...'
+                ? 'フレーム画像を書き出し中...'
                 : '${(controller.exportProgress * 100).toStringAsFixed(0)}% ${controller.exportMessage}',
           ),
         ],
@@ -1851,8 +1923,8 @@ class _EditorScreenState extends State<EditorScreen> {
           const SizedBox(height: 8),
           Text(
             _lastVideoExportToPhotoLibrary
-                ? '出力先: 写真ライブラリ'
-                : '\u51FA\u529B\u5148: ${controller.lastOutputPath}',
+                ? '出力先: フォトライブラリ'
+                : '出力先: ${controller.lastOutputPath}',
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -1863,7 +1935,7 @@ class _EditorScreenState extends State<EditorScreen> {
                 unawaited(_openLastOutputDestination(controller));
               },
               icon: const Icon(Icons.folder_open_rounded),
-              label: const Text('\u4FDD\u5B58\u5148\u3092\u958B\u304F'),
+              label: const Text('保存先を開く'),
             ),
           ),
         ],
@@ -1871,8 +1943,8 @@ class _EditorScreenState extends State<EditorScreen> {
           const SizedBox(height: 8),
           Text(
             _lastFrameExportToPhotoLibrary
-                ? '画像出力先: 写真ライブラリ'
-                : '\u753B\u50CF\u51FA\u529B\u5148: ${controller.lastFrameOutputPath}',
+                ? '画像出力先: フォトライブラリ'
+                : '画像出力先: ${controller.lastFrameOutputPath}',
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -1883,7 +1955,7 @@ class _EditorScreenState extends State<EditorScreen> {
                 unawaited(_openLastFrameDestination(controller));
               },
               icon: const Icon(Icons.image_search_rounded),
-              label: const Text('\u4FDD\u5B58\u5148\u3092\u958B\u304F'),
+              label: const Text('保存先を開く'),
             ),
           ),
         ],

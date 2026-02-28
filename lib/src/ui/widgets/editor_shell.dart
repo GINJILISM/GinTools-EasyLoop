@@ -3,6 +3,9 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../liquid_glass/liquid_glass_refs.dart';
+import 'interactive_liquid_glass_icon_button.dart';
+
 class EditorShell extends StatelessWidget {
   const EditorShell({
     super.key,
@@ -41,7 +44,7 @@ class EditorShell extends StatelessWidget {
             children: <Widget>[
               ListTile(
                 leading: const Icon(Icons.photo_library_outlined),
-                title: const Text('ライブラリから取り込み'),
+                title: const Text('ライブラリから選択'),
                 onTap: () {
                   Navigator.of(context).pop();
                   onImportFromLibraryRequested();
@@ -49,7 +52,7 @@ class EditorShell extends StatelessWidget {
               ),
               ListTile(
                 leading: const Icon(Icons.folder_open_rounded),
-                title: const Text('ファイルから取り込み'),
+                title: const Text('ファイルから選択'),
                 onTap: () {
                   Navigator.of(context).pop();
                   onImportFromFilesRequested();
@@ -63,39 +66,78 @@ class EditorShell extends StatelessWidget {
     );
   }
 
+  Widget _buildImportPlusButton({
+    required Key buttonKey,
+    required String tooltip,
+    required VoidCallback onPressed,
+  }) {
+    return InteractiveLiquidGlassIconButton(
+      buttonKey: buttonKey,
+      icon: Icons.add_rounded,
+      tooltip: tooltip,
+      isDisabled: false,
+      onPressed: onPressed,
+      useLiquidGlass: LiquidGlassRefs.supportsLiquidGlass,
+      backgroundColor: LiquidGlassRefs.accentBlue,
+      foregroundColor: LiquidGlassRefs.textPrimary,
+    );
+  }
+
+  Widget _buildSectionCard({required Widget child, required bool isCompact}) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: LiquidGlassRefs.surfaceCard,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: LiquidGlassRefs.outlineSoft),
+          boxShadow: const <BoxShadow>[
+            BoxShadow(
+              color: Color(0x40000000),
+              blurRadius: 4,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: EdgeInsets.all(isCompact ? 8 : 12),
+          child: child,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.sizeOf(context).width;
     final isCompact = screenWidth < 420;
+    final previewGap = isCompact ? 4.0 : 6.0;
+    final cardsGap = isCompact ? 6.0 : 8.0;
+    final timelineCardHeight = isCompact ? 132.0 : 168.0;
+    final controlCardHeight = isCompact ? 112.0 : 138.0;
 
     final body = Padding(
-      padding: EdgeInsets.all(isCompact ? 8 : 12),
+      padding: EdgeInsets.symmetric(
+        horizontal: isCompact ? 8 : 12,
+        vertical: isCompact ? 2 : 3,
+      ),
       child: Column(
         children: <Widget>[
-          Expanded(flex: isCompact ? 5 : 6, child: preview),
-          SizedBox(height: isCompact ? 8 : 12),
-          Expanded(
-            flex: isCompact ? 5 : 4,
-            child: Card(
-              clipBehavior: Clip.antiAlias,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final timelineHeight = (constraints.maxHeight * 0.45).clamp(
-                    64.0,
-                    isCompact ? 140.0 : 180.0,
-                  );
-                  return Padding(
-                    padding: EdgeInsets.all(isCompact ? 8 : 12),
-                    child: Column(
-                      children: <Widget>[
-                        SizedBox(height: timelineHeight, child: timeline),
-                        SizedBox(height: isCompact ? 6 : 8),
-                        Expanded(child: SingleChildScrollView(child: controls)),
-                      ],
-                    ),
-                  );
-                },
-              ),
+          Expanded(child: preview),
+          SizedBox(height: previewGap),
+          SizedBox(
+            height: timelineCardHeight,
+            child: _buildSectionCard(
+              isCompact: isCompact,
+              child: timeline,
+            ),
+          ),
+          SizedBox(height: cardsGap),
+          SizedBox(
+            height: controlCardHeight,
+            child: _buildSectionCard(
+              isCompact: isCompact,
+              child: SingleChildScrollView(child: controls),
             ),
           ),
         ],
@@ -103,33 +145,50 @@ class EditorShell extends StatelessWidget {
     );
 
     final titleStyle = Theme.of(context).textTheme.titleSmall?.copyWith(
-      fontSize: 12,
-      fontWeight: FontWeight.w500,
-    );
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color: LiquidGlassRefs.textPrimary,
+        );
     final isMobilePlatform = _isMobilePlatform;
 
     return Scaffold(
+      backgroundColor: LiquidGlassRefs.editorBgBase,
       appBar: AppBar(
+        toolbarHeight: isMobilePlatform ? 52 : 50,
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
         title: isMobilePlatform
             ? null
-            : Text(
-                '\u7de8\u96c6\u4e2d: $title',
-                style: titleStyle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+            : DecoratedBox(
+                decoration: BoxDecoration(
+                  color: LiquidGlassRefs.surfaceDeep,
+                  borderRadius: BorderRadius.circular(66),
+                ),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  child: Text(
+                    'Editing: $title',
+                    style: titleStyle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ),
         actions: <Widget>[
           if (isMobilePlatform)
             Row(
               children: <Widget>[
-                FilledButton.icon(
+                _buildImportPlusButton(
+                  buttonKey: const Key('import-video-mobile-plus-button'),
+                  tooltip: '動画を追加',
                   onPressed: onImportDefaultRequested,
-                  icon: const Icon(Icons.video_library_outlined),
-                  label: const Text('動画を選択'),
                 ),
                 const SizedBox(width: 4),
                 IconButton(
-                  tooltip: '取り込み元を選択',
+                  tooltip: '読み込み方法を選択',
                   onPressed: () {
                     _showImportSourceSheet(context);
                   },
@@ -137,17 +196,15 @@ class EditorShell extends StatelessWidget {
                 ),
               ],
             )
-          else if (isCompact)
-            IconButton(
-              tooltip: '\u52d5\u753b\u3092\u9078\u629e',
-              onPressed: onImportFromFilesRequested,
-              icon: const Icon(Icons.video_library_outlined),
-            )
           else
-            TextButton.icon(
+            _buildImportPlusButton(
+              buttonKey: Key(
+                isCompact
+                    ? 'import-video-compact-plus-button'
+                    : 'import-video-plus-button',
+              ),
+              tooltip: '動画を追加',
               onPressed: onImportFromFilesRequested,
-              icon: const Icon(Icons.video_library_outlined),
-              label: const Text('\u52d5\u753b\u3092\u9078\u629e'),
             ),
           const SizedBox(width: 10),
         ],
@@ -160,8 +217,11 @@ class EditorShell extends StatelessWidget {
               child: IgnorePointer(
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Colors.lightBlueAccent.withOpacity(0.18),
-                    border: Border.all(color: Colors.lightBlueAccent, width: 3),
+                    color: LiquidGlassRefs.accentBlue.withValues(alpha: 0.18),
+                    border: Border.all(
+                      color: LiquidGlassRefs.accentBlue,
+                      width: 3,
+                    ),
                   ),
                   child: const Center(
                     child: Card(
@@ -170,8 +230,7 @@ class EditorShell extends StatelessWidget {
                           horizontal: 18,
                           vertical: 10,
                         ),
-                        child: Text(
-                            '\u3053\u3053\u306b\u30c9\u30ed\u30c3\u30d7\u3057\u3066\u52d5\u753b\u3092\u7f6e\u304d\u63db\u3048'),
+                        child: Text('ここにドロップして動画を置き換え'),
                       ),
                     ),
                   ),

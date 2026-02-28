@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../liquid_glass/liquid_glass_refs.dart';
+
 class PreviewStage extends StatelessWidget {
   const PreviewStage({
     super.key,
@@ -20,62 +22,71 @@ class PreviewStage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: Stack(
-        fit: StackFit.expand,
-        children: <Widget>[
-          ColoredBox(color: Colors.black, child: video),
-          Positioned(
-            top: 14,
-            left: 14,
-            right: isPingPong ? 130 : 14,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.56),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                child: Text(
-                  positionLabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
+    final useInteractivePreview = !LiquidGlassRefs.isWindowsPlatform;
+    final previewContent = useInteractivePreview
+        ? InteractiveViewer(
+            minScale: 1.0,
+            maxScale: 4.0,
+            panEnabled: true,
+            scaleEnabled: true,
+            boundaryMargin: const EdgeInsets.all(80),
+            child: ColoredBox(
+              color: Colors.transparent,
+              child: video,
             ),
-          ),
-          if (isPingPong)
+          )
+        : ColoredBox(
+            color: Colors.transparent,
+            child: video,
+          );
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: ColoredBox(
+        color: LiquidGlassRefs.editorBgBase,
+        child: Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            previewContent,
             Positioned(
-              top: 14,
-              right: 14,
-              child: Chip(
-                visualDensity: VisualDensity.compact,
-                label: Text(
-                  isReverseDirection ? 'ピンポン: 逆方向' : 'ピンポン: 順方向',
+              top: 10,
+              left: 14,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  child: Text(
+                    positionLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
             ),
-          if (centerOverlay != null)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: Center(child: centerOverlay!),
+            if (centerOverlay != null)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Center(child: centerOverlay!),
+                ),
               ),
-            ),
-          if (bottomOverlay != null)
-            Positioned(
-              left: 12,
-              right: 12,
-              bottom: 12,
-              child: Align(
-                alignment: Alignment.bottomCenter,
-                child: bottomOverlay!,
+            if (bottomOverlay != null)
+              Positioned(
+                left: 12,
+                right: 12,
+                bottom: 8,
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: bottomOverlay!,
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -5,12 +5,14 @@ import 'package:gintoolflutter/src/ui/widgets/playback_transport_bar.dart';
 import 'package:gintoolflutter/src/ui/widgets/preview_stage.dart';
 
 void main() {
-  testWidgets('トランスポートがプレビュー配下にあり、下部設定内に重複しない', (tester) async {
+  testWidgets('トランスポートがプレビュー下部にあり、設定パネルが表示される', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: EditorShell(
           title: 'sample.mp4',
-          onCloseRequested: () {},
+          onImportDefaultRequested: () {},
+          onImportFromFilesRequested: () {},
+          onImportFromLibraryRequested: () {},
           preview: PreviewStage(
             video: const ColoredBox(color: Colors.black),
             positionLabel: '00:01 (start 0.00s / end 5.00s)',
