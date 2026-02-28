@@ -1332,6 +1332,8 @@ class _EditorScreenState extends State<EditorScreen> {
                   video: Video(
                     controller: _videoController,
                     controls: NoVideoControls,
+                    fit: BoxFit.contain,
+                    fill: LiquidGlassRefs.editorBgBase,
                   ),
                   positionLabel: _formatDuration(playheadDuration),
                   isPingPong: controller.loopMode == LoopMode.pingPong,

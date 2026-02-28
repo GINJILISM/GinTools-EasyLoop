@@ -45,7 +45,7 @@ class PlaybackTransportBar extends StatelessWidget {
         onPressed: onSetStart,
         useLiquidGlass: useLiquidGlass,
         grouped: useLiquidGlass,
-        backgroundColor: const Color(0xFF66707A),
+        backgroundColor: LiquidGlassRefs.transportBoundaryButtonColor,
         foregroundColor: LiquidGlassRefs.textPrimary,
       ),
       InteractiveLiquidGlassIconButton(
@@ -56,7 +56,7 @@ class PlaybackTransportBar extends StatelessWidget {
         onPressed: onJumpStart,
         useLiquidGlass: useLiquidGlass,
         grouped: useLiquidGlass,
-        backgroundColor: const Color(0x22BDE6FF),
+        backgroundColor: LiquidGlassRefs.transportSecondaryButtonColor,
         foregroundColor: LiquidGlassRefs.textPrimary,
       ),
       InteractiveLiquidGlassIconButton(
@@ -67,7 +67,7 @@ class PlaybackTransportBar extends StatelessWidget {
         onPressed: onStepPrev,
         useLiquidGlass: useLiquidGlass,
         grouped: useLiquidGlass,
-        backgroundColor: const Color(0x22BDE6FF),
+        backgroundColor: LiquidGlassRefs.transportSecondaryButtonColor,
         foregroundColor: LiquidGlassRefs.textPrimary,
       ),
       InteractiveLiquidGlassIconButton(
@@ -90,7 +90,7 @@ class PlaybackTransportBar extends StatelessWidget {
         onPressed: onStepNext,
         useLiquidGlass: useLiquidGlass,
         grouped: useLiquidGlass,
-        backgroundColor: const Color(0x22BDE6FF),
+        backgroundColor: LiquidGlassRefs.transportSecondaryButtonColor,
         foregroundColor: LiquidGlassRefs.textPrimary,
       ),
       InteractiveLiquidGlassIconButton(
@@ -101,7 +101,7 @@ class PlaybackTransportBar extends StatelessWidget {
         onPressed: onJumpEnd,
         useLiquidGlass: useLiquidGlass,
         grouped: useLiquidGlass,
-        backgroundColor: const Color(0x22BDE6FF),
+        backgroundColor: LiquidGlassRefs.transportSecondaryButtonColor,
         foregroundColor: LiquidGlassRefs.textPrimary,
       ),
       InteractiveLiquidGlassIconButton(
@@ -112,7 +112,7 @@ class PlaybackTransportBar extends StatelessWidget {
         onPressed: onSetEnd,
         useLiquidGlass: useLiquidGlass,
         grouped: useLiquidGlass,
-        backgroundColor: const Color(0xFF66707A),
+        backgroundColor: LiquidGlassRefs.transportBoundaryButtonColor,
         foregroundColor: LiquidGlassRefs.textPrimary,
       ),
     ];

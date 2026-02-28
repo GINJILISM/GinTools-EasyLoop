@@ -22,24 +22,6 @@ class PreviewStage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final useInteractivePreview = !LiquidGlassRefs.isWindowsPlatform;
-    final previewContent = useInteractivePreview
-        ? InteractiveViewer(
-            minScale: 1.0,
-            maxScale: 4.0,
-            panEnabled: true,
-            scaleEnabled: true,
-            boundaryMargin: const EdgeInsets.all(80),
-            child: ColoredBox(
-              color: Colors.transparent,
-              child: video,
-            ),
-          )
-        : ColoredBox(
-            color: Colors.transparent,
-            child: video,
-          );
-
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: ColoredBox(
@@ -47,7 +29,21 @@ class PreviewStage extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: <Widget>[
-            previewContent,
+            Positioned.fill(
+              child: InteractiveViewer(
+                minScale: 1.0,
+                maxScale: 4.0,
+                panEnabled: true,
+                scaleEnabled: true,
+                boundaryMargin: const EdgeInsets.all(80),
+                child: SizedBox.expand(
+                  child: ColoredBox(
+                    color: Colors.transparent,
+                    child: video,
+                  ),
+                ),
+              ),
+            ),
             Positioned(
               top: 10,
               left: 14,

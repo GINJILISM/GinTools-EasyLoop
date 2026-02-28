@@ -25,6 +25,8 @@ abstract final class LiquidGlassRefs {
   static const double transportPaddingHorizontal = 12;
   static const double transportPaddingVertical = 4;
   static const double transportCompactWidth = 420;
+  static const Color transportBoundaryButtonColor = Color.fromARGB(141, 227, 227, 227);
+  static const Color transportSecondaryButtonColor = Color(0x22BDE6FF);
 
   // Transport layer and blending.
   static const LiquidGlassSettings transportLayerSettings = LiquidGlassSettings(
@@ -129,7 +131,7 @@ abstract final class LiquidGlassRefs {
   static const double buttonPrimaryGlowRadius = 1.0;
   static const double buttonSecondaryGlowRadius = 0.8;
   static const Color buttonPrimaryGlowColor = Color.fromARGB(97, 255, 255, 255);
-  static const Color buttonSecondaryGlowColor = Colors.white24;
+  static const Color buttonSecondaryGlowColor = Color.fromRGBO(255, 255, 255, 0.239);
 
   static bool get isWindowsPlatform {
     if (kIsWeb) return false;
