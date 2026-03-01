@@ -25,8 +25,53 @@ abstract final class LiquidGlassRefs {
   static const double transportPaddingHorizontal = 12;
   static const double transportPaddingVertical = 4;
   static const double transportCompactWidth = 420;
-  static const Color transportBoundaryButtonColor = Color.fromARGB(141, 227, 227, 227);
+  static const Color transportBoundaryButtonColor =
+      Color.fromARGB(141, 227, 227, 227);
   static const Color transportSecondaryButtonColor = Color(0x22BDE6FF);
+
+  // Timeline trim-range liquid overlay.
+  static const double timelineSelectionGlassHorizontalInset = 2;
+  static const double timelineSelectionGlassVerticalInset = 4;
+  static const double timelineSelectionGlassRadius = 10;
+  static const double timelineSelectionGlassBorderWidth = 1.4;
+  static const Color timelineSelectionGlassBorderColor =
+      Color.fromRGBO(252, 181, 123, 0.533);
+  static const Color timelineSelectionGlassFillColor =
+      Color.fromRGBO(246, 246, 246, 0);
+  static const Color timelineSelectionOutsideDimColor =
+      Color.fromRGBO(0, 0, 0, 0.40);
+  static const Color timelineSelectionGlowColor =
+      Color.fromRGBO(255, 197, 150, 0.032);
+  static const double timelineSelectionGlowRadius = 10;
+  static const double timelineSelectionGlowSpread = 0.2;
+  static const LiquidGlassSettings timelineSelectionLayerSettings =
+      LiquidGlassSettings(
+    thickness: 44,
+    blur: 0,
+    glassColor: Color.fromRGBO(255, 238, 223, 0.102),
+    lightIntensity: 1.0,
+    ambientStrength: 0.09,
+    saturation: 1.22,
+  );
+  static const LiquidGlassSettings timelineSelectionLayerSettingsWindows =
+      LiquidGlassSettings(
+    thickness: 10,
+    blur: 0,
+    glassColor: Color.fromRGBO(251, 209, 157, 0.09),
+    lightIntensity: 0.82,
+    ambientStrength: 0.08,
+    saturation: 1.12,
+  );
+  static const double timelineSelectionStretch = 0.3;
+  static const double timelineSelectionInteractionScale = 1.01;
+  static const double timelineSelectionStretchWindows = 0.16;
+  static const double timelineSelectionInteractionScaleWindows = 1.02;
+  static const Duration timelineTrimHandleInertiaDuration = Duration(
+    milliseconds: 520,
+  );
+  static const double timelineTrimHandleInertiaMinOffsetPx = 6;
+  static const double timelineTrimHandleInertiaMaxOffsetPx = 20;
+  static const double timelineTrimHandlePulseMax = 0.11;
 
   // Transport layer and blending.
   static const LiquidGlassSettings transportLayerSettings = LiquidGlassSettings(
@@ -131,7 +176,8 @@ abstract final class LiquidGlassRefs {
   static const double buttonPrimaryGlowRadius = 1.0;
   static const double buttonSecondaryGlowRadius = 0.8;
   static const Color buttonPrimaryGlowColor = Color.fromARGB(97, 255, 255, 255);
-  static const Color buttonSecondaryGlowColor = Color.fromRGBO(255, 255, 255, 0.239);
+  static const Color buttonSecondaryGlowColor =
+      Color.fromRGBO(255, 255, 255, 0.239);
 
   static bool get isWindowsPlatform {
     if (kIsWeb) return false;

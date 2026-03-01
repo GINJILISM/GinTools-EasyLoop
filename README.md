@@ -29,6 +29,31 @@ Windows/macOS を主対象にした GUI ベースのループ動画編集アプ�
 
 ## Liquid Glass 実装メモ（Windows安定化）
 
+### タイムライン Liquid 範囲オーバーレイ（2026-03 追加）
+
+- トリム選択範囲（start~end）に、角丸長方形の透明 Liquid Glass オーバーレイを重ねる。
+- レイヤー順は `サムネイル -> Liquid範囲 -> マーカー/Playhead/TrimHandle`。
+- 外側減光は単純な左右矩形ではなく、角丸穴あきマスク（CustomPainter）で処理し、Liquid形状と一致させる。
+- `set start / set end` で位置が飛ぶとき、ハンドルと Liquid 範囲を同じ慣性オフセットで動かし、見た目のズレを防ぐ。
+- Liquid の glow は `BoxShadow` + `GlassGlow`（非Windows）で付与。Windows は安定性優先で控えめ設定。
+
+#### 主な調整先（Single Source of Truth）
+
+- `lib/src/ui/liquid_glass/liquid_glass_refs.dart`
+  - `timelineSelectionLayerSettings` / `timelineSelectionLayerSettingsWindows`
+  - `timelineSelectionGlass*`（inset/radius/border/fill）
+  - `timelineSelectionOutsideDimColor`
+  - `timelineSelectionGlowColor`, `timelineSelectionGlowRadius`, `timelineSelectionGlowSpread`
+  - `timelineTrimHandleInertia*`（duration/min-max offset/pulse）
+
+#### 実装ファイル
+
+- `lib/src/ui/widgets/trim_timeline.dart`
+  - `InteractiveViewer` をサムネイル側に適用
+  - `_buildTrimRangeLiquidOverlay`
+  - `_buildOutsideDimOverlay` + `_OutsideSelectionDimPainter`
+  - `visualTrimStart/End` ベースで overlay / mask / handle を同期
+
 ### 躓きポイント（再発しやすい実装矛盾）
 
 1. `LiquidGlass` のスコープ不足  
