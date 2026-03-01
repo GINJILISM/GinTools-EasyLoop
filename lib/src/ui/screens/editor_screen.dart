@@ -72,6 +72,7 @@ class _EditorScreenState extends State<EditorScreen> {
   static const String _prefGifExportDir = 'gif_export_dir';
   static const String _prefSaveToPhotoLibrary = 'save_to_photo_library';
   static const String _prefOutputNameTemplate = 'output_name_template';
+  static const String _prefEnableLiquidGlass = 'enable_liquid_glass_ui';
 
   late final Player _player;
   late final VideoController _videoController;
@@ -395,6 +396,9 @@ class _EditorScreenState extends State<EditorScreen> {
       prefs.getString(_prefOutputNameTemplate),
     );
     _saveToPhotoLibrary = prefs.getBool(_prefSaveToPhotoLibrary) ?? true;
+    LiquidGlassRefs.setUserLiquidGlassEnabled(
+      prefs.getBool(_prefEnableLiquidGlass) ?? true,
+    );
     if (mounted) {
       setState(() {});
     }
@@ -420,6 +424,10 @@ class _EditorScreenState extends State<EditorScreen> {
       _normalizeOutputNameTemplate(_outputNameTemplate),
     );
     await prefs.setBool(_prefSaveToPhotoLibrary, _saveToPhotoLibrary);
+    await prefs.setBool(
+      _prefEnableLiquidGlass,
+      LiquidGlassRefs.isLiquidGlassEnabledByUser,
+    );
   }
 
   void _schedulePersistExportSettings() {
@@ -1390,6 +1398,8 @@ class _EditorScreenState extends State<EditorScreen> {
                         zoomLevel: controller.zoomLevel,
                         tileBaseWidth: _tileBaseWidth,
                         thumbnails: _thumbnails,
+                        trimEnabled: !controller.isExporting &&
+                            !controller.isFrameExporting,
                         onViewportWidthChanged: (width) {
                           if ((width - _timelineViewportWidth).abs() < 1) {
                             return;
@@ -1419,6 +1429,10 @@ class _EditorScreenState extends State<EditorScreen> {
                                 _scheduleThumbnailBuild(force: false);
                               },
                         onTrimChanged: (start, end) {
+                          if (controller.isExporting ||
+                              controller.isFrameExporting) {
+                            return;
+                          }
                           controller.setTrimRange(
                             startSeconds: start,
                             endSeconds: end,
@@ -1767,6 +1781,21 @@ class _EditorScreenState extends State<EditorScreen> {
                               },
                             ),
                           ],
+                          const Divider(height: 24),
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text(
+                                'Liquid Glass UI \u3092\u6709\u52b9\u5316'),
+                            subtitle: const Text(
+                                '\u91cd\u3044\u5834\u5408\u306f OFF \u306b\u3057\u3066\u304f\u3060\u3055\u3044'),
+                            value: LiquidGlassRefs.isLiquidGlassEnabledByUser,
+                            onChanged: (value) {
+                              LiquidGlassRefs.setUserLiquidGlassEnabled(value);
+                              _schedulePersistExportSettings();
+                              setModalState(() {});
+                              if (mounted) setState(() {});
+                            },
+                          ),
                         ],
                       ),
                     ),

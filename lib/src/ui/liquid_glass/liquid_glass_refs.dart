@@ -4,6 +4,8 @@ import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
 /// Single source of truth for Liquid Glass tuning.
 abstract final class LiquidGlassRefs {
+  static bool _liquidGlassEnabledByUser = true;
+
   // Shared color tokens (synced with .pen fallback styling).
   static const Color editorBgBase = Color(0xFF2C2C2C);
   static const Color surfaceDeep = Color(0xFF121212);
@@ -184,9 +186,16 @@ abstract final class LiquidGlassRefs {
     return defaultTargetPlatform == TargetPlatform.windows;
   }
 
+  static bool get isLiquidGlassEnabledByUser => _liquidGlassEnabledByUser;
+
+  static void setUserLiquidGlassEnabled(bool enabled) {
+    _liquidGlassEnabledByUser = enabled;
+  }
+
   // Platform gate for liquid glass.
   static bool get supportsLiquidGlass {
     if (kIsWeb) return false;
+    if (!_liquidGlassEnabledByUser) return false;
     return switch (defaultTargetPlatform) {
       TargetPlatform.android ||
       TargetPlatform.iOS ||

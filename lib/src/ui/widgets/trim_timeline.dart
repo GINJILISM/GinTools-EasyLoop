@@ -21,6 +21,7 @@ class TrimTimeline extends StatefulWidget {
     required this.thumbnails,
     required this.onTrimChanged,
     required this.onSeek,
+    this.trimEnabled = true,
     this.onScrubStart,
     this.onScrubUpdate,
     this.onScrubEnd,
@@ -37,6 +38,7 @@ class TrimTimeline extends StatefulWidget {
   final List<TimelineThumbnail> thumbnails;
   final void Function(double startSeconds, double endSeconds) onTrimChanged;
   final ValueChanged<double> onSeek;
+  final bool trimEnabled;
   final VoidCallback? onScrubStart;
   final ValueChanged<double>? onScrubUpdate;
   final ValueChanged<double>? onScrubEnd;
@@ -63,6 +65,14 @@ class _TrimTimelineState extends State<TrimTimeline>
   Offset? _lastMiddlePanGlobal;
   bool _isTwoFingerGestureActive = false;
   double _pinchStartZoom = 1.0;
+  bool _isDraggingStartHandle = false;
+  bool _isDraggingEndHandle = false;
+  double? _dragPreviewStartSeconds;
+  double? _dragPreviewEndSeconds;
+  double _dragBaseStartSeconds = 0;
+  double _dragBaseEndSeconds = 0;
+  double _dragAccumulatedPx = 0;
+  double _dragPxPerSecond = 1.0;
 
   bool _isTouchPanCandidate = false;
   bool _isTouchPanning = false;
@@ -100,6 +110,18 @@ class _TrimTimelineState extends State<TrimTimeline>
   @override
   void didUpdateWidget(covariant TrimTimeline oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!widget.trimEnabled && oldWidget.trimEnabled) {
+      _resetDragInteractionState();
+      _isScrubbingPlayhead = false;
+      _isMiddlePanning = false;
+      _lastMiddlePanGlobal = null;
+      _isTwoFingerGestureActive = false;
+      _activeTouchPointers.clear();
+      _clearTouchPanState();
+      _stopTrimHandleInertia(isStart: true);
+      _stopTrimHandleInertia(isStart: false);
+      return;
+    }
     if (_isDraggingHandle) {
       return;
     }
@@ -172,6 +194,9 @@ class _TrimTimelineState extends State<TrimTimeline>
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTapDown: (details) {
+                          if (!widget.trimEnabled) {
+                            return;
+                          }
                           if (_isMiddlePanning ||
                               _isTwoFingerGestureActive ||
                               _isTouchPanning ||
@@ -186,6 +211,9 @@ class _TrimTimelineState extends State<TrimTimeline>
                           );
                         },
                         onHorizontalDragStart: (details) {
+                          if (!widget.trimEnabled) {
+                            return;
+                          }
                           if (_isMiddlePanning ||
                               _isTwoFingerGestureActive ||
                               _isTouchPanning ||
@@ -283,14 +311,26 @@ class _TrimTimelineState extends State<TrimTimeline>
                             _endHandleInertiaController,
                           ]),
                           builder: (context, _) {
-                            final visualTrimStartPx = _visualTrimStartPx(
-                              trimStartPx: trimStartPx,
-                              timelineWidth: timelineWidth,
-                            );
-                            final visualTrimEndPx = _visualTrimEndPx(
-                              trimEndPx: trimEndPx,
-                              timelineWidth: timelineWidth,
-                            );
+                            final visualTrimStartPx = _isDraggingStartHandle &&
+                                    _dragPreviewStartSeconds != null
+                                ? _secondsToPx(
+                                    _dragPreviewStartSeconds!,
+                                    effectivePps,
+                                  )
+                                : _visualTrimStartPx(
+                                    trimStartPx: trimStartPx,
+                                    timelineWidth: timelineWidth,
+                                  );
+                            final visualTrimEndPx = _isDraggingEndHandle &&
+                                    _dragPreviewEndSeconds != null
+                                ? _secondsToPx(
+                                    _dragPreviewEndSeconds!,
+                                    effectivePps,
+                                  )
+                                : _visualTrimEndPx(
+                                    trimEndPx: trimEndPx,
+                                    timelineWidth: timelineWidth,
+                                  );
                             final startPulse = _currentHandlePulse(
                               _startHandleInertiaController,
                             );
@@ -331,22 +371,37 @@ class _TrimTimelineState extends State<TrimTimeline>
                                   x: visualTrimStartPx,
                                   color: LiquidGlassRefs.accentOrange,
                                   pulse: startPulse,
+                                  enabled: widget.trimEnabled,
                                   onDragStart: () {
                                     _isDraggingHandle = true;
+                                    _isDraggingStartHandle = true;
+                                    _isDraggingEndHandle = false;
+                                    _dragBaseStartSeconds =
+                                        widget.trimStartSeconds;
+                                    _dragBaseEndSeconds = widget.trimEndSeconds;
+                                    _dragAccumulatedPx = 0;
+                                    _dragPxPerSecond = effectivePps;
+                                    _dragPreviewStartSeconds =
+                                        widget.trimStartSeconds;
+                                    _dragPreviewEndSeconds = null;
                                     _stopTrimHandleInertia(isStart: true);
                                   },
                                   onDrag: (deltaPx) {
-                                    final nextStart = _pxToSeconds(
-                                      trimStartPx + deltaPx,
-                                      effectivePps,
-                                    ).clamp(0.0, widget.trimEndSeconds - 0.1);
+                                    _dragAccumulatedPx += deltaPx;
+                                    final nextStart = (_dragBaseStartSeconds +
+                                            (_dragAccumulatedPx /
+                                                _dragPxPerSecond))
+                                        .clamp(0.0, _dragBaseEndSeconds - 0.1);
+                                    _dragPreviewStartSeconds =
+                                        nextStart.toDouble();
+                                    setState(() {});
                                     widget.onTrimChanged(
                                       nextStart,
-                                      widget.trimEndSeconds,
+                                      _dragBaseEndSeconds,
                                     );
                                   },
                                   onDragEnd: () {
-                                    _isDraggingHandle = false;
+                                    _resetDragInteractionState();
                                   },
                                 ),
                                 _buildTrimHandle(
@@ -354,25 +409,39 @@ class _TrimTimelineState extends State<TrimTimeline>
                                   x: visualTrimEndPx,
                                   color: LiquidGlassRefs.accentOrange,
                                   pulse: endPulse,
+                                  enabled: widget.trimEnabled,
                                   onDragStart: () {
                                     _isDraggingHandle = true;
+                                    _isDraggingStartHandle = false;
+                                    _isDraggingEndHandle = true;
+                                    _dragBaseStartSeconds =
+                                        widget.trimStartSeconds;
+                                    _dragBaseEndSeconds = widget.trimEndSeconds;
+                                    _dragAccumulatedPx = 0;
+                                    _dragPxPerSecond = effectivePps;
+                                    _dragPreviewStartSeconds = null;
+                                    _dragPreviewEndSeconds =
+                                        widget.trimEndSeconds;
                                     _stopTrimHandleInertia(isStart: false);
                                   },
                                   onDrag: (deltaPx) {
-                                    final nextEnd = _pxToSeconds(
-                                      trimEndPx + deltaPx,
-                                      effectivePps,
-                                    ).clamp(
-                                      widget.trimStartSeconds + 0.1,
+                                    _dragAccumulatedPx += deltaPx;
+                                    final nextEnd = (_dragBaseEndSeconds +
+                                            (_dragAccumulatedPx /
+                                                _dragPxPerSecond))
+                                        .clamp(
+                                      _dragBaseStartSeconds + 0.1,
                                       _totalSeconds,
                                     );
+                                    _dragPreviewEndSeconds = nextEnd.toDouble();
+                                    setState(() {});
                                     widget.onTrimChanged(
-                                      widget.trimStartSeconds,
+                                      _dragBaseStartSeconds,
                                       nextEnd,
                                     );
                                   },
                                   onDragEnd: () {
-                                    _isDraggingHandle = false;
+                                    _resetDragInteractionState();
                                   },
                                 ),
                               ],
@@ -630,7 +699,9 @@ class _TrimTimelineState extends State<TrimTimeline>
     );
 
     Widget overlay;
-    if (LiquidGlassRefs.supportsLiquidGlass) {
+    final useLiveLiquid = LiquidGlassRefs.supportsLiquidGlass &&
+        !(LiquidGlassRefs.isWindowsPlatform && _isDraggingHandle);
+    if (useLiveLiquid) {
       final liquid = LiquidStretch(
         stretch: LiquidGlassRefs.isWindowsPlatform
             ? LiquidGlassRefs.timelineSelectionStretchWindows
@@ -737,6 +808,7 @@ class _TrimTimelineState extends State<TrimTimeline>
     required double x,
     required Color color,
     required double pulse,
+    required bool enabled,
     required VoidCallback onDragStart,
     required ValueChanged<double> onDrag,
     required VoidCallback onDragEnd,
@@ -751,10 +823,11 @@ class _TrimTimelineState extends State<TrimTimeline>
         child: GestureDetector(
           key: key,
           behavior: HitTestBehavior.translucent,
-          onHorizontalDragStart: (_) => onDragStart(),
-          onHorizontalDragUpdate: (details) => onDrag(details.delta.dx),
-          onHorizontalDragEnd: (_) => onDragEnd(),
-          onHorizontalDragCancel: onDragEnd,
+          onHorizontalDragStart: enabled ? (_) => onDragStart() : null,
+          onHorizontalDragUpdate:
+              enabled ? (details) => onDrag(details.delta.dx) : null,
+          onHorizontalDragEnd: enabled ? (_) => onDragEnd() : null,
+          onHorizontalDragCancel: enabled ? onDragEnd : null,
           child: SizedBox(
             width: 14,
             child: Center(
@@ -851,6 +924,16 @@ class _TrimTimelineState extends State<TrimTimeline>
     final viewportWidth = _lastViewportWidth > 0 ? _lastViewportWidth : 360;
     final fitPps = viewportWidth / _totalSeconds;
     return fitPps * widget.zoomLevel;
+  }
+
+  void _resetDragInteractionState() {
+    _isDraggingHandle = false;
+    _isDraggingStartHandle = false;
+    _isDraggingEndHandle = false;
+    _dragPreviewStartSeconds = null;
+    _dragPreviewEndSeconds = null;
+    _dragAccumulatedPx = 0;
+    _dragPxPerSecond = 1.0;
   }
 
   double _secondsToPx(double seconds, double pxPerSecond) {
