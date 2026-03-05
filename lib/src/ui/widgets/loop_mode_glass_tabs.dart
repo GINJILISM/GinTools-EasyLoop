@@ -40,9 +40,12 @@ class LoopModeGlassTabs extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final useLiquidGlass = LiquidGlassRefs.supportsLiquidGlass;
+    final isIOS = LiquidGlassRefs.isIOSPlatform;
     final layerSettings = LiquidGlassRefs.isWindowsPlatform
-        ? LiquidGlassRefs.loopTabsLayerSettingsWindows
-        : LiquidGlassRefs.loopTabsLayerSettings;
+      ? LiquidGlassRefs.loopTabsLayerSettingsWindows
+      : (isIOS
+        ? LiquidGlassRefs.loopTabsLayerSettingsIOS
+        : LiquidGlassRefs.loopTabsLayerSettings);
     final selected = _selection;
     final activeAlignment = _alignmentFor(selected);
 
@@ -109,6 +112,16 @@ class LoopModeGlassTabs extends StatelessWidget {
       );
     }
 
+    if (isIOS) {
+      return LiquidGlass.withOwnLayer(
+        settings: layerSettings,
+        shape: const LiquidRoundedSuperellipse(
+          borderRadius: LiquidGlassRefs.loopTabsOuterRadius,
+        ),
+        child: tabBody,
+      );
+    }
+
     return LiquidGlassLayer(
       settings: layerSettings,
       child: LiquidGlassBlendGroup(
@@ -140,7 +153,9 @@ class LoopModeGlassTabs extends StatelessWidget {
       ),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: LiquidGlassRefs.accentBlue,
+          color: LiquidGlassRefs.accentBlue.withValues(
+            alpha: LiquidGlassRefs.isIOSPlatform ? 0.82 : 1,
+          ),
           borderRadius:
               BorderRadius.circular(LiquidGlassRefs.loopTabsInnerRadius),
         ),

@@ -18,9 +18,8 @@ abstract final class LiquidGlassRefs {
   static const Color textSecondary = Color(0xFFEAF7FF);
   static const Color outlineSoft = Color.fromRGBO(207, 207, 207, 0.2);
 
-  // Transport bar layout.
-  // Smaller => buttons are closer and blend easier.
-  static const double transportButtonBlendSpacing = 4;
+  // Transport bar layout. // Smaller => buttons are closer and blend easier.
+  static const double transportButtonBlendSpacing = 1;
   static const double transportButtonSpacing = transportButtonBlendSpacing;
   static const double transportButtonSize = 42;
   static const double transportPrimaryButtonSize = 60;
@@ -32,9 +31,9 @@ abstract final class LiquidGlassRefs {
   static const Color transportSecondaryButtonColor = Color(0x22BDE6FF);
 
   // Timeline trim-range liquid overlay.
-  static const double timelineSelectionGlassHorizontalInset = 2;
-  static const double timelineSelectionGlassVerticalInset = 4;
-  static const double timelineSelectionGlassRadius = 10;
+  static const double timelineSelectionGlassHorizontalInset = 0;
+  static const double timelineSelectionGlassVerticalInset = 2;
+  static const double timelineSelectionGlassRadius = 15;
   static const double timelineSelectionGlassBorderWidth = 1.4;
   static const Color timelineSelectionGlassBorderColor =
       Color.fromRGBO(252, 181, 123, 0.533);
@@ -44,14 +43,14 @@ abstract final class LiquidGlassRefs {
       Color.fromRGBO(0, 0, 0, 0.40);
   static const Color timelineSelectionGlowColor =
       Color.fromRGBO(255, 197, 150, 0.032);
-  static const double timelineSelectionGlowRadius = 10;
-  static const double timelineSelectionGlowSpread = 0.2;
+  static const double timelineSelectionGlowRadius = 0.1;
+  static const double timelineSelectionGlowSpread = 0.1;
   static const LiquidGlassSettings timelineSelectionLayerSettings =
       LiquidGlassSettings(
-    thickness: 44,
+    thickness: 30,
     blur: 0,
     glassColor: Color.fromRGBO(255, 238, 223, 0.102),
-    lightIntensity: 1.0,
+    lightIntensity: 1,
     ambientStrength: 0.09,
     saturation: 1.22,
   );
@@ -64,10 +63,10 @@ abstract final class LiquidGlassRefs {
     ambientStrength: 0.08,
     saturation: 1.12,
   );
-  static const double timelineSelectionStretch = 0.3;
+  static const double timelineSelectionStretch = 0.1;
   static const double timelineSelectionInteractionScale = 1.01;
   static const double timelineSelectionStretchWindows = 0.16;
-  static const double timelineSelectionInteractionScaleWindows = 1.02;
+  static const double timelineSelectionInteractionScaleWindows = 1.01;
   static const Duration timelineTrimHandleInertiaDuration = Duration(
     milliseconds: 520,
   );
@@ -94,7 +93,7 @@ abstract final class LiquidGlassRefs {
     ambientStrength: 0.02,
     saturation: 1.08,
   );
-  static const double transportButtonsBlend = 20;
+  static const double transportButtonsBlend = 3;
 
   // Loop mode tabs (normal loop / ping-pong).
   static const double loopTabsBlend = 20;
@@ -122,6 +121,16 @@ abstract final class LiquidGlassRefs {
     ambientStrength: 0.05,
     saturation: 1.08,
   );
+  static const LiquidGlassSettings loopTabsLayerSettingsIOS =
+      LiquidGlassSettings(
+    thickness: 26,
+    blur: 0.85,
+    glassColor: Color.fromARGB(24, 255, 255, 255),
+    lightIntensity: 0.58,
+    ambientStrength: 0.06,
+    saturation: 1.08,
+  );
+  static const double loopTabsBlendIOS = 6;
 
   // Export action buttons.
   static const double exportButtonHeight = 40;
@@ -157,13 +166,13 @@ abstract final class LiquidGlassRefs {
   static const double rangeToggleThumbSize = 30;
   static const double rangeToggleBorderRadius = 999;
   static const double rangeToggleInnerPadding = 4;
-  static const double rangeToggleBlend = 12;
+  static const double rangeToggleBlend = 1;
   static const Color rangeToggleThumbOnColor = Color(0xFF6ECBF3);
   static const Color rangeToggleThumbOffColor = Colors.transparent;
   static const LiquidGlassSettings rangeToggleLayerSettings =
       LiquidGlassSettings(
-    thickness: 30,
-    blur: 1.0,
+    thickness: 10,
+    blur: 0,
     glassColor: Color(0x1FFFFFFF),
     lightIntensity: 0.7,
     ambientStrength: 0.08,
@@ -184,6 +193,11 @@ abstract final class LiquidGlassRefs {
   static bool get isWindowsPlatform {
     if (kIsWeb) return false;
     return defaultTargetPlatform == TargetPlatform.windows;
+  }
+
+  static bool get isIOSPlatform {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.iOS;
   }
 
   static bool get isLiquidGlassEnabledByUser => _liquidGlassEnabledByUser;

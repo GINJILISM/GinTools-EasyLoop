@@ -40,7 +40,7 @@ class PlaybackTransportBar extends StatelessWidget {
       InteractiveLiquidGlassIconButton(
         buttonKey: const Key('transport-set-start'),
         icon: Icons.first_page_rounded,
-        tooltip: '現在位置を開始位置に設定',
+        tooltip: '現在位置を開始点に設定',
         isDisabled: isDisabled,
         onPressed: onSetStart,
         useLiquidGlass: useLiquidGlass,
@@ -51,7 +51,7 @@ class PlaybackTransportBar extends StatelessWidget {
       InteractiveLiquidGlassIconButton(
         buttonKey: const Key('transport-trim-start'),
         icon: Icons.skip_previous_rounded,
-        tooltip: '開始位置へ移動',
+        tooltip: '開始点へ移動',
         isDisabled: isDisabled,
         onPressed: onJumpStart,
         useLiquidGlass: useLiquidGlass,
@@ -96,7 +96,7 @@ class PlaybackTransportBar extends StatelessWidget {
       InteractiveLiquidGlassIconButton(
         buttonKey: const Key('transport-trim-end'),
         icon: Icons.skip_next_rounded,
-        tooltip: '終了位置へ移動',
+        tooltip: '終了点へ移動',
         isDisabled: isDisabled,
         onPressed: onJumpEnd,
         useLiquidGlass: useLiquidGlass,
@@ -107,7 +107,7 @@ class PlaybackTransportBar extends StatelessWidget {
       InteractiveLiquidGlassIconButton(
         buttonKey: const Key('transport-set-end'),
         icon: Icons.last_page_rounded,
-        tooltip: '現在位置を終了位置に設定',
+        tooltip: '現在位置を終了点に設定',
         isDisabled: isDisabled,
         onPressed: onSetEnd,
         useLiquidGlass: useLiquidGlass,

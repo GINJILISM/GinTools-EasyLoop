@@ -110,37 +110,43 @@ class EditorShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.sizeOf(context).width;
+    final viewPadding = MediaQuery.viewPaddingOf(context);
     final isCompact = screenWidth < 420;
     final previewGap = isCompact ? 4.0 : 6.0;
     final cardsGap = isCompact ? 6.0 : 8.0;
     final timelineCardHeight = isCompact ? 132.0 : 168.0;
-    final controlCardHeight = isCompact ? 112.0 : 138.0;
+    final controlCardHeight = isCompact ? 120.0 : 138.0;
 
-    final body = Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: isCompact ? 8 : 12,
-        vertical: isCompact ? 2 : 3,
-      ),
-      child: Column(
-        children: <Widget>[
-          Expanded(child: preview),
-          SizedBox(height: previewGap),
-          SizedBox(
-            height: timelineCardHeight,
-            child: _buildSectionCard(
-              isCompact: isCompact,
-              child: timeline,
+    final body = SafeArea(
+      top: false,
+      bottom: true,
+      minimum: EdgeInsets.only(bottom: (isCompact ? 8 : 4) + viewPadding.bottom),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: isCompact ? 12 : 12,
+          vertical: isCompact ? 2 : 3,
+        ),
+        child: Column(
+          children: <Widget>[
+            Expanded(child: preview),
+            SizedBox(height: previewGap),
+            SizedBox(
+              height: timelineCardHeight,
+              child: _buildSectionCard(
+                isCompact: isCompact,
+                child: timeline,
+              ),
             ),
-          ),
-          SizedBox(height: cardsGap),
-          SizedBox(
-            height: controlCardHeight,
-            child: _buildSectionCard(
-              isCompact: isCompact,
-              child: SingleChildScrollView(child: controls),
+            SizedBox(height: cardsGap),
+            SizedBox(
+              height: controlCardHeight,
+              child: _buildSectionCard(
+                isCompact: isCompact,
+                child: SingleChildScrollView(child: controls),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
 

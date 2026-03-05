@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
@@ -29,11 +30,54 @@ class LiquidGlassActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final useLiquidGlass = LiquidGlassRefs.supportsLiquidGlass;
     final isWindowsPlatform = LiquidGlassRefs.isWindowsPlatform;
+    final isIOSPlatform = LiquidGlassRefs.isIOSPlatform;
     final enabled = onPressed != null;
     final colorScheme = Theme.of(context).colorScheme;
 
     final resolvedForegroundColor = foregroundColor ??
         (primary ? colorScheme.primary : colorScheme.onSurface);
+
+    if (isIOSPlatform) {
+      final fg = resolvedForegroundColor;
+      final disabledFg = colorScheme.onSurface.withValues(alpha: 0.45);
+      final effectiveFg = enabled ? fg : disabledFg;
+
+      return SizedBox(
+        height: LiquidGlassRefs.exportButtonHeight,
+        child: CupertinoButton(
+          onPressed: onPressed,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          color: primary
+              ? (fillColor ?? colorScheme.primary)
+              : fillColor,
+          borderRadius: BorderRadius.circular(
+            LiquidGlassRefs.exportButtonRadius,
+          ),
+          minimumSize: Size.fromHeight(LiquidGlassRefs.exportButtonHeight),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              IconTheme(
+                data: IconThemeData(color: effectiveFg),
+                child: icon,
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: DefaultTextStyle(
+                  style: TextStyle(
+                    color: effectiveFg,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  child: label,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     if (!useLiquidGlass) {
       if (primary) {
@@ -85,8 +129,10 @@ class LiquidGlassActionButton extends StatelessWidget {
             borderRadius:
                 BorderRadius.circular(LiquidGlassRefs.exportButtonRadius),
             child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: LiquidGlassRefs.exportButtonHorizontalPadding,
+              padding: EdgeInsets.symmetric(
+                horizontal: isIOSPlatform
+                    ? 10
+                    : LiquidGlassRefs.exportButtonHorizontalPadding,
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -95,13 +141,20 @@ class LiquidGlassActionButton extends StatelessWidget {
                     data: IconThemeData(color: enabled ? fg : disabledFg),
                     child: icon,
                   ),
-                  const SizedBox(width: 8),
-                  DefaultTextStyle(
-                    style: TextStyle(
-                      color: enabled ? fg : disabledFg,
-                      fontWeight: FontWeight.w600,
+                  SizedBox(width: isIOSPlatform ? 6 : 8),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: DefaultTextStyle(
+                        style: TextStyle(
+                          color: enabled ? fg : disabledFg,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        child: label,
+                      ),
                     ),
-                    child: label,
                   ),
                 ],
               ),
