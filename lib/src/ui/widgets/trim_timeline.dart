@@ -9,6 +9,7 @@ import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
 import '../../models/timeline_thumbnail.dart';
 import '../liquid_glass/liquid_glass_refs.dart';
+import '../app_strings.dart';
 
 class TrimTimeline extends StatefulWidget {
   const TrimTimeline({
@@ -607,7 +608,7 @@ class _TrimTimelineState extends State<TrimTimeline>
             decoration: BoxDecoration(color: Color(0x22162A3C)),
             child: Center(
               child: Text(
-                'サムネイル読み込み中...',
+                AppStrings.thumbnailLoading,
                 style: TextStyle(color: Colors.white70),
               ),
             ),

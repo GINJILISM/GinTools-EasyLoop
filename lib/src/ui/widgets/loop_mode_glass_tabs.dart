@@ -5,6 +5,7 @@ import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
 import '../../models/loop_mode.dart';
 import '../liquid_glass/liquid_glass_refs.dart';
+import '../app_strings.dart';
 
 enum _LoopTabsSelection {
   off,
@@ -81,15 +82,15 @@ class LoopModeGlassTabs extends StatelessWidget {
                   children: <Widget>[
                     _buildTab(
                       selection: _LoopTabsSelection.off,
-                      tooltip: 'ループオフ',
+                      tooltip: AppStrings.loopOff,
                     ),
                     _buildTab(
                       selection: _LoopTabsSelection.forward,
-                      tooltip: '通常ループ',
+                      tooltip: AppStrings.normalLoop,
                     ),
                     _buildTab(
                       selection: _LoopTabsSelection.pingPong,
-                      tooltip: 'ピンポンループ',
+                      tooltip: AppStrings.pingPongLoop,
                     ),
                   ],
                 ),

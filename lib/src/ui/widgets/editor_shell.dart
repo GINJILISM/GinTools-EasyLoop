@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../liquid_glass/liquid_glass_refs.dart';
 import 'interactive_liquid_glass_icon_button.dart';
+import '../app_strings.dart';
 
 class EditorShell extends StatelessWidget {
   const EditorShell({
@@ -44,7 +45,7 @@ class EditorShell extends StatelessWidget {
             children: <Widget>[
               ListTile(
                 leading: const Icon(Icons.photo_library_outlined),
-                title: const Text('ライブラリから選択'),
+                title: const Text(AppStrings.selectFromLibrary),
                 onTap: () {
                   Navigator.of(context).pop();
                   onImportFromLibraryRequested();
@@ -52,7 +53,7 @@ class EditorShell extends StatelessWidget {
               ),
               ListTile(
                 leading: const Icon(Icons.folder_open_rounded),
-                title: const Text('ファイルから選択'),
+                title: const Text(AppStrings.selectFromFile),
                 onTap: () {
                   Navigator.of(context).pop();
                   onImportFromFilesRequested();
@@ -176,7 +177,7 @@ class EditorShell extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   child: Text(
-                    'Editing: $title',
+                    AppStrings.editingTitle(title),
                     style: titleStyle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -189,12 +190,12 @@ class EditorShell extends StatelessWidget {
               children: <Widget>[
                 _buildImportPlusButton(
                   buttonKey: const Key('import-video-mobile-plus-button'),
-                  tooltip: '動画を追加',
+                  tooltip: AppStrings.addVideo,
                   onPressed: onImportDefaultRequested,
                 ),
                 const SizedBox(width: 4),
                 IconButton(
-                  tooltip: '読み込み方法を選択',
+                  tooltip: AppStrings.selectImportMethod,
                   onPressed: () {
                     _showImportSourceSheet(context);
                   },
@@ -209,7 +210,7 @@ class EditorShell extends StatelessWidget {
                     ? 'import-video-compact-plus-button'
                     : 'import-video-plus-button',
               ),
-              tooltip: '動画を追加',
+              tooltip: AppStrings.addVideo,
               onPressed: onImportFromFilesRequested,
             ),
           const SizedBox(width: 10),
@@ -236,7 +237,7 @@ class EditorShell extends StatelessWidget {
                           horizontal: 18,
                           vertical: 10,
                         ),
-                        child: Text('ここにドロップして動画を置き換え'),
+                        child: Text(AppStrings.dropToReplaceVideo),
                       ),
                     ),
                   ),

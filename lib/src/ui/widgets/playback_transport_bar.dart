@@ -3,6 +3,7 @@ import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
 import '../liquid_glass/liquid_glass_refs.dart';
 import 'interactive_liquid_glass_icon_button.dart';
+import '../app_strings.dart';
 
 class PlaybackTransportBar extends StatelessWidget {
   const PlaybackTransportBar({
@@ -44,7 +45,7 @@ class PlaybackTransportBar extends StatelessWidget {
         child: InteractiveLiquidGlassIconButton(
         buttonKey: const Key('transport-set-start'),
         icon: Icons.first_page_rounded,
-        tooltip: '現在位置を開始点に設定',
+        tooltip: AppStrings.setCurrentAsStart,
         isDisabled: isDisabled,
         onPressed: onSetStart,
         useLiquidGlass: useLiquidGlass,
@@ -58,7 +59,7 @@ class PlaybackTransportBar extends StatelessWidget {
         child: InteractiveLiquidGlassIconButton(
         buttonKey: const Key('transport-trim-start'),
         icon: Icons.skip_previous_rounded,
-        tooltip: '開始点へ移動',
+        tooltip: AppStrings.jumpToStart,
         isDisabled: isDisabled,
         onPressed: onJumpStart,
         useLiquidGlass: useLiquidGlass,
@@ -72,7 +73,7 @@ class PlaybackTransportBar extends StatelessWidget {
         child: InteractiveLiquidGlassIconButton(
         buttonKey: const Key('transport-frame-prev'),
         icon: Icons.fast_rewind_rounded,
-        tooltip: '1フレーム戻る',
+        tooltip: AppStrings.stepBackOneFrame,
         isDisabled: isDisabled,
         onPressed: onStepPrev,
         useLiquidGlass: useLiquidGlass,
@@ -86,7 +87,7 @@ class PlaybackTransportBar extends StatelessWidget {
         child: InteractiveLiquidGlassIconButton(
         buttonKey: const Key('transport-play-pause'),
         icon: isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-        tooltip: isPlaying ? '一時停止' : '再生',
+        tooltip: isPlaying ? AppStrings.pause : AppStrings.play,
         isDisabled: isDisabled,
         onPressed: onPlayPause,
         useLiquidGlass: useLiquidGlass,
@@ -101,7 +102,7 @@ class PlaybackTransportBar extends StatelessWidget {
         child: InteractiveLiquidGlassIconButton(
         buttonKey: const Key('transport-frame-next'),
         icon: Icons.fast_forward_rounded,
-        tooltip: '1フレーム進む',
+        tooltip: AppStrings.stepForwardOneFrame,
         isDisabled: isDisabled,
         onPressed: onStepNext,
         useLiquidGlass: useLiquidGlass,
@@ -115,7 +116,7 @@ class PlaybackTransportBar extends StatelessWidget {
         child: InteractiveLiquidGlassIconButton(
         buttonKey: const Key('transport-trim-end'),
         icon: Icons.skip_next_rounded,
-        tooltip: '終了点へ移動',
+        tooltip: AppStrings.jumpToEnd,
         isDisabled: isDisabled,
         onPressed: onJumpEnd,
         useLiquidGlass: useLiquidGlass,
@@ -129,7 +130,7 @@ class PlaybackTransportBar extends StatelessWidget {
         child: InteractiveLiquidGlassIconButton(
         buttonKey: const Key('transport-set-end'),
         icon: Icons.last_page_rounded,
-        tooltip: '現在位置を終了点に設定',
+        tooltip: AppStrings.setCurrentAsEnd,
         isDisabled: isDisabled,
         onPressed: onSetEnd,
         useLiquidGlass: useLiquidGlass,

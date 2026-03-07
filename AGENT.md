@@ -34,3 +34,9 @@
 - iOS: 実行したチェック、xcodebuild未実行理由、潜在問題（推測として明記）、修正ファイル
 - ローカルMacで次に実行すべきコマンド候補
 - 同一原因のエラーは重複報告しない（1次原因と派生を分離）
+
+
+## UI文言追加時のルール（LLM向け）
+- UI表示文言の追加・変更時は `lib/src/ui/app_strings.dart` を必ず参照する。
+- 画面/Widget側への文字列直書きは避ける（`Text`, `tooltip`, `labelText`, `hintText` など）。
+- 詳細ルールは `docs/llm-agent-string-policy.md` を参照。

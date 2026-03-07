@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../services/file_import_service.dart';
 import '../../state/app_controller.dart';
+import '../app_strings.dart';
 import 'editor_screen.dart';
 import 'import_screen.dart';
 
@@ -13,7 +14,7 @@ class RootScreen extends StatelessWidget {
 
   Future<void> _openFromFilesApp(AppController appController) async {
     final path = await _fileImportService.pickVideoFromFileApp(
-      dialogTitle: 'ファイルアプリから動画を選択',
+      dialogTitle: AppStrings.fileAppVideoPickerTitle,
     );
     if (path == null) return;
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../liquid_glass/liquid_glass_refs.dart';
+import '../app_strings.dart';
 
 Future<bool> showReplaceInputDialog(BuildContext context) async {
   final shouldReplace = await showDialog<bool>(
@@ -23,11 +24,11 @@ Future<bool> showReplaceInputDialog(BuildContext context) async {
           side: const BorderSide(color: LiquidGlassRefs.outlineSoft),
         ),
         title: Text(
-          '別の動画に切り替えますか？',
+          AppStrings.replaceVideoTitle,
           style: titleStyle,
         ),
         content: Text(
-          '現在の編集中セッションは新しい動画に置き換えられます。',
+          AppStrings.replaceVideoDescription,
           style: bodyStyle,
         ),
         actions: <Widget>[
@@ -36,7 +37,7 @@ Future<bool> showReplaceInputDialog(BuildContext context) async {
             style: TextButton.styleFrom(
               foregroundColor: LiquidGlassRefs.textSecondary,
             ),
-            child: const Text('キャンセル'),
+            child: const Text(AppStrings.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
@@ -44,7 +45,7 @@ Future<bool> showReplaceInputDialog(BuildContext context) async {
               backgroundColor: LiquidGlassRefs.accentBlue,
               foregroundColor: Colors.white,
             ),
-            child: const Text('切り替える'),
+            child: const Text(AppStrings.replace),
           ),
         ],
       );

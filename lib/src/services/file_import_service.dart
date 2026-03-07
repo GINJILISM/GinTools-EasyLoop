@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
+import '../ui/app_strings.dart';
 
 class FileImportService {
   static const List<String> supportedExtensions = <String>[
@@ -29,16 +30,16 @@ class FileImportService {
 
   String? validateVideoPath(String? path) {
     if (path == null || path.trim().isEmpty) {
-      return '動画ファイルが選択されていません。';
+      return AppStrings.videoNotSelected;
     }
     if (!isVideoPath(path)) {
-      return '未対応のファイル形式です。対応形式: ${supportedExtensions.join(', ')}';
+      return AppStrings.unsupportedFileFormat(supportedExtensions.join(', '));
     }
     return null;
   }
 
   Future<String?> pickVideoFromFileApp({
-    String dialogTitle = '動画ファイルを選択',
+    String dialogTitle = AppStrings.pickVideoFileDialogTitle,
   }) async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,

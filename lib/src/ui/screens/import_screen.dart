@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/file_import_service.dart';
 import '../liquid_glass/liquid_glass_refs.dart';
+import '../app_strings.dart';
 
 class ImportScreen extends StatefulWidget {
   const ImportScreen({super.key, required this.onVideoSelected});
@@ -36,7 +37,7 @@ class _ImportScreenState extends State<ImportScreen> {
     setState(() => _isPicking = true);
     try {
       final path = await _fileImportService.pickVideoFromFileApp(
-        dialogTitle: 'ファイルアプリから動画を選択',
+        dialogTitle: AppStrings.fileAppVideoPickerTitle,
       );
       await _handlePickedPath(path);
     } finally {
@@ -94,7 +95,7 @@ class _ImportScreenState extends State<ImportScreen> {
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           Text(
-            '編集する動画を選択',
+            AppStrings.importScreenTitle,
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   color: LiquidGlassRefs.textPrimary,
                   fontWeight: FontWeight.w600,
@@ -103,7 +104,7 @@ class _ImportScreenState extends State<ImportScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'ここにドロップするか、ファイル/ライブラリから開いてください。',
+            AppStrings.importScreenDescription,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: LiquidGlassRefs.textSecondary,
                 ),
@@ -121,7 +122,7 @@ class _ImportScreenState extends State<ImportScreen> {
                   backgroundColor: LiquidGlassRefs.accentOrange,
                   foregroundColor: Colors.white,
                 ),
-                child: const Text('ファイルから開く'),
+                child: const Text(AppStrings.openFromFile),
               ),
               FilledButton(
                 onPressed: _isPicking ? null : _openLibrary,
@@ -129,13 +130,13 @@ class _ImportScreenState extends State<ImportScreen> {
                   backgroundColor: LiquidGlassRefs.accentOrangeMuted,
                   foregroundColor: LiquidGlassRefs.textPrimary,
                 ),
-                child: const Text('ライブラリから開く'),
+                child: const Text(AppStrings.openFromLibrary),
               ),
             ],
           ),
           const SizedBox(height: 12),
           Text(
-            'Desktop: ドラッグ&ドロップ対応',
+            AppStrings.desktopDragAndDropHint,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: LiquidGlassRefs.textSecondary,
                 ),

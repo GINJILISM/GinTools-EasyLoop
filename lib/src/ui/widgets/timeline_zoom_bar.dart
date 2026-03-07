@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../liquid_glass/liquid_glass_refs.dart';
+import '../app_strings.dart';
 
 class TimelineZoomBar extends StatelessWidget {
   const TimelineZoomBar({
@@ -22,7 +23,7 @@ class TimelineZoomBar extends StatelessWidget {
 
     return Row(
       children: <Widget>[
-        Text('タイムラインズーム', style: labelStyle),
+        Text(AppStrings.timelineZoom, style: labelStyle),
         const SizedBox(width: 8),
         Expanded(
           child: SliderTheme(

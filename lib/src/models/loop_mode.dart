@@ -1,3 +1,5 @@
+import '../ui/app_strings.dart';
+
 enum LoopMode {
   forward,
   pingPong;
@@ -5,9 +7,9 @@ enum LoopMode {
   String get label {
     switch (this) {
       case LoopMode.forward:
-        return '→ 通常ループ';
+        return AppStrings.loopModeForwardLabel;
       case LoopMode.pingPong:
-        return '←→ ピンポン';
+        return AppStrings.loopModePingPongLabel;
     }
   }
 

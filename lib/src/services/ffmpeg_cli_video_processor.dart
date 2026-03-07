@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 import '../models/export_format.dart';
 import '../models/gif_export_options.dart';
 import '../models/loop_mode.dart';
+import '../ui/app_strings.dart';
 import 'video_processor.dart';
 
 class FfmpegCliVideoProcessor implements VideoProcessor {
@@ -40,7 +41,7 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
       final raw = mediaInfo?.getDuration();
       final seconds = double.tryParse(raw ?? '');
       if (seconds == null || seconds <= 0) {
-        throw ExportException('動画の長さを取得できませんでした。');
+        throw ExportException(AppStrings.failedToGetVideoDuration);
       }
       return Duration(milliseconds: (seconds * 1000).round());
     }
@@ -56,13 +57,13 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
     ], runInShell: true);
 
     if (result.exitCode != 0) {
-      throw ExportException('動画長さの解析に失敗しました。ffprobeの設定を確認してください。');
+      throw ExportException(AppStrings.failedToParseVideoDuration);
     }
 
     final raw = (result.stdout as String).trim();
     final seconds = double.tryParse(raw);
     if (seconds == null || seconds <= 0) {
-      throw ExportException('動画の長さを取得できませんでした。');
+      throw ExportException(AppStrings.failedToGetVideoDuration);
     }
     return Duration(milliseconds: (seconds * 1000).round());
   }
@@ -76,10 +77,10 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
 
     final clipDuration = request.trimEnd - request.trimStart;
     if (clipDuration <= Duration.zero) {
-      throw ExportException('開始点と終了点の範囲が不正です。');
+      throw ExportException(AppStrings.invalidTrimRange);
     }
     if (request.loopCount < 1) {
-      throw ExportException('ループ回数は1以上で指定してください。');
+      throw ExportException(AppStrings.invalidLoopCount);
     }
 
     final tempRoot = await getTemporaryDirectory();
@@ -103,7 +104,7 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
     final palettePath = p.join(workDir.path, 'palette.png');
 
     try {
-      onProgress(0.02, 'トリミング中...');
+      onProgress(0.02, AppStrings.trimming);
       await _runFfmpeg(
         <String>[
           '-y',
@@ -126,7 +127,7 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
         ],
         expectedDurationSeconds: clipDuration.inMilliseconds / 1000,
         onStepProgress: (progress) {
-          onProgress(_normalizeProgress(0.02, 0.30, progress), 'トリミング中...');
+          onProgress(_normalizeProgress(0.02, 0.30, progress), AppStrings.trimming);
         },
       );
 
@@ -141,7 +142,7 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
           onProgress: onProgress,
         );
 
-        onProgress(0.65, 'GIFパレット生成中...');
+        onProgress(0.65, AppStrings.generatingGifPalette);
         await _runFfmpeg(
           buildGifPaletteArgs(
             inputPath: cycleInput,
@@ -153,12 +154,12 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
           onStepProgress: (progress) {
             onProgress(
               _normalizeProgress(0.65, 0.12, progress),
-              'GIFパレット生成中...',
+              AppStrings.generatingGifPalette,
             );
           },
         );
 
-        onProgress(0.78, 'GIFエンコード中...');
+        onProgress(0.78, AppStrings.gifEncoding);
         await _runFfmpeg(
           buildGifRenderArgs(
             inputPath: cycleInput,
@@ -171,12 +172,12 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
           onStepProgress: (progress) {
             onProgress(
               _normalizeProgress(0.78, 0.21, progress),
-              'GIFエンコード中...',
+              AppStrings.gifEncoding,
             );
           },
         );
 
-        onProgress(1, '書き出し完了');
+        onProgress(1, AppStrings.exportDone);
         return request.outputPath;
       }
 
@@ -187,7 +188,7 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
         ).join('\n');
         await File(concatList).writeAsString(listContent);
 
-        onProgress(0.38, '連結中...');
+        onProgress(0.38, AppStrings.concatenating);
         await _runFfmpeg(
           <String>[
             '-y',
@@ -213,11 +214,11 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
           expectedDurationSeconds:
               (clipDuration.inMilliseconds / 1000) * request.loopCount,
           onStepProgress: (progress) {
-            onProgress(_normalizeProgress(0.38, 0.61, progress), '連結中...');
+            onProgress(_normalizeProgress(0.38, 0.61, progress), AppStrings.concatenating);
           },
         );
       } else {
-        onProgress(0.38, '逆再生クリップ生成中...');
+        onProgress(0.38, AppStrings.generatingReverseClip);
         await _buildReverseClip(
           forwardClip: forwardClip,
           reverseClip: reverseClip,
@@ -234,7 +235,7 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
         ).join('\n');
         await File(concatList).writeAsString(pingPongContent);
 
-        onProgress(0.60, 'ピンポン連結中...');
+        onProgress(0.60, AppStrings.pingPongConcatenating);
         await _runFfmpeg(
           <String>[
             '-y',
@@ -260,15 +261,15 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
           expectedDurationSeconds:
               (clipDuration.inMilliseconds / 1000) * request.loopCount * 2,
           onStepProgress: (progress) {
-            onProgress(_normalizeProgress(0.60, 0.39, progress), 'ピンポン連結中...');
+            onProgress(_normalizeProgress(0.60, 0.39, progress), AppStrings.pingPongConcatenating);
           },
         );
       }
 
-      onProgress(1, '書き出し完了');
+      onProgress(1, AppStrings.exportDone);
       return request.outputPath;
     } on ProcessException {
-      throw ExportException('FFmpegが見つかりません。PATHにffmpeg/ffprobeを追加してください。');
+      throw ExportException(AppStrings.ffmpegNotFoundInPath);
     } finally {
       if (workDir.existsSync()) {
         await workDir.delete(recursive: true);
@@ -324,7 +325,7 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
     final resolvedPath = _resolveInputPath(rawInputPath);
     final inputFile = File(resolvedPath);
     if (!await inputFile.exists()) {
-      throw ExportException('入力動画が見つかりません: $resolvedPath');
+      throw ExportException(AppStrings.inputVideoNotFound(resolvedPath));
     }
 
     if (!_useEmbeddedFfmpegKit) {
@@ -345,7 +346,7 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
       await inputFile.copy(stagedPath);
       return stagedPath;
     } on FileSystemException catch (error) {
-      throw ExportException('入力動画の一時コピーに失敗しました: ${error.message}');
+      throw ExportException(AppStrings.failedToCopyInputVideo(error.message));
     }
   }
 
@@ -362,7 +363,7 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
       return forwardClip;
     }
 
-    onProgress(0.38, '逆再生クリップ生成中...');
+    onProgress(0.38, AppStrings.generatingReverseClip);
     await _buildReverseClip(
       forwardClip: forwardClip,
       reverseClip: reverseClip,
@@ -376,7 +377,7 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
         '${_concatFileLine(forwardClip)}\n${_concatFileLine(reverseClip)}';
     await File(concatList).writeAsString(cycleContent);
 
-    onProgress(0.55, 'GIF 1サイクル生成中...');
+    onProgress(0.55, AppStrings.gifSingleCycleGenerating);
     await _runFfmpeg(
       <String>[
         '-y',
@@ -399,7 +400,7 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
       ],
       expectedDurationSeconds: (clipDuration.inMilliseconds / 1000) * 2,
       onStepProgress: (progress) {
-        onProgress(_normalizeProgress(0.55, 0.09, progress), 'GIF 1サイクル生成中...');
+        onProgress(_normalizeProgress(0.55, 0.09, progress), AppStrings.gifSingleCycleGenerating);
       },
     );
 
@@ -432,7 +433,7 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
       ],
       expectedDurationSeconds: clipDuration.inMilliseconds / 1000,
       onStepProgress: (progress) {
-        onProgress(progress, '逆再生クリップ生成中...');
+        onProgress(progress, AppStrings.generatingReverseClip);
       },
     );
   }
@@ -525,7 +526,7 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
         final logs = await session.getAllLogsAsString();
         final failStackTrace = await session.getFailStackTrace();
         throw ExportException(
-          'FFmpegの実行に失敗しました。\n'
+          '${AppStrings.ffmpegExecutionFailed}\n'
           'returnCode=${returnCode?.getValue() ?? 'unknown'}\n'
           '${_summarizeFfmpegLogs(logs ?? '')}'
           '${_summarizeFailStackTrace(failStackTrace)}',
@@ -560,7 +561,7 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
 
     if (exitCode != 0) {
       throw ExportException(
-        'FFmpegの実行に失敗しました。\n${_summarizeFfmpegLogs(logBuffer.toString())}',
+        '${AppStrings.ffmpegExecutionFailed}\n${_summarizeFfmpegLogs(logBuffer.toString())}',
       );
     }
   }
@@ -568,7 +569,7 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
   String _resolveInputPath(String rawPath) {
     final trimmed = rawPath.trim();
     if (trimmed.isEmpty) {
-      throw ExportException('入力動画パスが空です。');
+      throw ExportException(AppStrings.emptyInputVideoPath);
     }
 
     final uri = Uri.tryParse(trimmed);
@@ -581,13 +582,13 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
     }
 
     if (uri.scheme != 'file') {
-      throw ExportException('未対応の入力パス形式です: $trimmed');
+      throw ExportException(AppStrings.unsupportedInputPathFormat(trimmed));
     }
 
     try {
       return uri.toFilePath();
     } catch (_) {
-      throw ExportException('入力動画パスの解析に失敗しました: $trimmed');
+      throw ExportException(AppStrings.failedToParseInputPath(trimmed));
     }
   }
 
@@ -599,7 +600,7 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
         .toList();
 
     if (lines.isEmpty) {
-      return '詳細ログを取得できませんでした。';
+      return AppStrings.failedToGetDetailedLog;
     }
 
     const hints = <String>[
@@ -663,11 +664,11 @@ class FfmpegCliVideoProcessor implements VideoProcessor {
         '-version',
       ], runInShell: true);
       if (ffmpeg.exitCode != 0 || ffprobe.exitCode != 0) {
-        throw ExportException('ffmpeg/ffprobe の起動に失敗しました。');
+        throw ExportException(AppStrings.failedToStartFfmpeg);
       }
       _toolChecked = true;
     } on ProcessException {
-      throw ExportException('ffmpeg/ffprobe が見つかりません。インストール後に再実行してください。');
+      throw ExportException(AppStrings.ffmpegNotInstalled);
     }
   }
 

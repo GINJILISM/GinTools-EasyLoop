@@ -8,6 +8,7 @@ import '../models/export_format.dart';
 import '../models/gif_export_options.dart';
 import '../models/loop_mode.dart';
 import '../services/video_processor.dart';
+import '../ui/app_strings.dart';
 
 class EditorController extends ChangeNotifier {
   EditorController({required this.videoProcessor});
@@ -231,14 +232,14 @@ class EditorController extends ChangeNotifier {
     required String outputPath,
   }) async {
     if (!canExport) {
-      errorMessage = '書き出し可能な状態ではありません。';
+      errorMessage = AppStrings.exportUnavailable;
       notifyListeners();
       return false;
     }
 
     isExporting = true;
     exportProgress = 0;
-    exportMessage = '書き出しを開始しています...';
+    exportMessage = AppStrings.exportStarting;
     errorMessage = null;
     lastOutputPath = null;
     notifyListeners();
@@ -268,7 +269,7 @@ class EditorController extends ChangeNotifier {
 
       lastOutputPath = generatedPath;
       exportProgress = 1;
-      exportMessage = '書き出しが完了しました。';
+      exportMessage = AppStrings.exportCompleted;
       notifyListeners();
       return true;
     } on ExportException catch (error) {
@@ -276,7 +277,7 @@ class EditorController extends ChangeNotifier {
       notifyListeners();
       return false;
     } catch (error) {
-      errorMessage = '書き出し中に予期しないエラーが発生しました: $error';
+      errorMessage = AppStrings.unexpectedExportError(error);
       notifyListeners();
       return false;
     } finally {
@@ -291,7 +292,7 @@ class EditorController extends ChangeNotifier {
     String? outputPath,
   }) async {
     if (isExporting || isFrameExporting || totalDuration <= Duration.zero) {
-      errorMessage = '現在の状態ではフレーム書き出しできません。';
+      errorMessage = AppStrings.frameExportUnavailable;
       notifyListeners();
       return false;
     }
@@ -323,7 +324,7 @@ class EditorController extends ChangeNotifier {
       notifyListeners();
       return false;
     } catch (error) {
-      errorMessage = 'フレーム書き出し中に予期しないエラーが発生しました: $error';
+      errorMessage = AppStrings.unexpectedFrameExportError(error);
       notifyListeners();
       return false;
     } finally {

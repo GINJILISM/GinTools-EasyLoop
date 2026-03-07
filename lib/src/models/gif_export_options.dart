@@ -1,3 +1,5 @@
+import '../ui/app_strings.dart';
+
 enum GifQualityPreset {
   low,
   medium,
@@ -6,11 +8,11 @@ enum GifQualityPreset {
   String get label {
     switch (this) {
       case GifQualityPreset.low:
-        return '低 (約200px)';
+        return AppStrings.gifQualityLow;
       case GifQualityPreset.medium:
-        return '中 (50%解像度)';
+        return AppStrings.gifQualityMedium;
       case GifQualityPreset.high:
-        return '高 (100%解像度)';
+        return AppStrings.gifQualityHigh;
     }
   }
 }
@@ -24,5 +26,5 @@ enum GifFpsPreset {
 
   final int value;
 
-  String get label => '$value FPS';
+  String get label => AppStrings.gifFpsLabel(value);
 }

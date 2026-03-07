@@ -34,6 +34,7 @@ import '../widgets/replace_input_dialog.dart';
 import '../widgets/loop_mode_glass_tabs.dart';
 import '../widgets/timeline_zoom_bar.dart';
 import '../widgets/trim_timeline.dart';
+import '../app_strings.dart';
 
 class EditorScreen extends StatefulWidget {
   const EditorScreen({
@@ -255,7 +256,7 @@ class _EditorScreenState extends State<EditorScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('書き出し中は入力動画を切り替えできません。'),
+          content: Text(AppStrings.cannotSwitchVideoWhileExporting),
           behavior: _snackBarBehavior,
         ),
       );
@@ -293,7 +294,7 @@ class _EditorScreenState extends State<EditorScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('動画の読み込みに失敗しました: $error'),
+          content: Text(AppStrings.failedToLoadVideo(error)),
           behavior: _snackBarBehavior,
         ),
       );
@@ -982,7 +983,7 @@ class _EditorScreenState extends State<EditorScreen> {
         if (mounted) setState(() {});
         messenger.showSnackBar(
           SnackBar(
-            content: Text('書き出しが完了しました。'),
+            content: Text(AppStrings.exportDoneSnackbar),
             behavior: _snackBarBehavior,
           ),
         );
@@ -1044,7 +1045,7 @@ class _EditorScreenState extends State<EditorScreen> {
 
     messenger.showSnackBar(
       SnackBar(
-        content: Text('フレーム画像を書き出しました: $framePath'),
+        content: Text(AppStrings.frameExportDone(framePath)),
         behavior: _snackBarBehavior,
       ),
     );
@@ -1064,10 +1065,10 @@ class _EditorScreenState extends State<EditorScreen> {
       final isSuccess =
           (result['isSuccess'] == true) || (result['success'] == true);
       if (!isSuccess) {
-        throw Exception('保存に失敗しました。');
+        throw Exception(AppStrings.saveFailed);
       }
       messenger.showSnackBar(
-        _buildPhotoLibrarySavedSnackBar('フレーム画像をフォトライブラリに保存しました。'),
+        _buildPhotoLibrarySavedSnackBar(AppStrings.frameSavedToPhotoLibrary),
       );
       return true;
     } catch (error) {
@@ -1100,18 +1101,18 @@ class _EditorScreenState extends State<EditorScreen> {
       final isSuccess =
           (result['isSuccess'] == true) || (result['success'] == true);
       if (!isSuccess) {
-        throw Exception('保存に失敗しました。');
+        throw Exception(AppStrings.saveFailed);
       }
       messenger.showSnackBar(
         _buildPhotoLibrarySavedSnackBar(
-          '$formatLabel をフォトライブラリに保存しました。',
+          AppStrings.savedToPhotoLibrary(formatLabel),
         ),
       );
       return true;
     } catch (error) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text('フォトライブラリ保存に失敗しました: $error'),
+          content: Text(AppStrings.failedToSavePhotoLibrary(error)),
           behavior: _snackBarBehavior,
         ),
       );
@@ -1126,7 +1127,7 @@ class _EditorScreenState extends State<EditorScreen> {
         children: <Widget>[
           Expanded(child: Text(message)),
           IconButton(
-            tooltip: '保存先を開く',
+            tooltip: AppStrings.openOutputDestination,
             onPressed: () {
               unawaited(_openPhotoLibrary());
             },
@@ -1175,7 +1176,7 @@ class _EditorScreenState extends State<EditorScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('フォトライブラリアプリを開けませんでした。'),
+          content: Text(AppStrings.failedToOpenPhotoLibraryApp),
           behavior: _snackBarBehavior,
         ),
       );
@@ -1248,7 +1249,7 @@ class _EditorScreenState extends State<EditorScreen> {
     }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('書き出し先パスを設定してください。'),
+        content: Text(AppStrings.setExportPath),
         behavior: _snackBarBehavior,
       ),
     );
@@ -1368,7 +1369,7 @@ class _EditorScreenState extends State<EditorScreen> {
                                   ),
                                 ),
                                 SizedBox(width: 10),
-                                Text('iCloud から動画を読み込み中...'),
+                                Text(AppStrings.loadingVideoFromICloud),
                               ],
                             ),
                           ),
@@ -1450,7 +1451,7 @@ class _EditorScreenState extends State<EditorScreen> {
                     const SizedBox(height: 8),
                     if (_isMobilePlatform)
                       Text(
-                        'タイムライン: 2本指ピンチで拡大縮小 / 2本指スライドで左右スクロール',
+                        AppStrings.timelineGestureHint,
                         style: Theme.of(context).textTheme.bodySmall,
                       )
                     else
@@ -1576,7 +1577,7 @@ class _EditorScreenState extends State<EditorScreen> {
                       Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: LiquidGlassRefs.textPrimary,
                           ),
-                  title: const Text('書き出し設定'),
+                  title: const Text(AppStrings.exportSettingsTitle),
                   content: SizedBox(
                     width: 540,
                     child: SingleChildScrollView(
@@ -1587,7 +1588,7 @@ class _EditorScreenState extends State<EditorScreen> {
                           DropdownButtonFormField<ExportFormat>(
                             initialValue: controller.exportFormat,
                             decoration: const InputDecoration(
-                              labelText: '書き出し形式',
+                              labelText: AppStrings.exportFormat,
                             ),
                             items: ExportFormat.values
                                 .map(
@@ -1608,7 +1609,7 @@ class _EditorScreenState extends State<EditorScreen> {
                           const SizedBox(height: 12),
                           if (controller.exportFormat ==
                               ExportFormat.mp4) ...<Widget>[
-                            const Text('ループ回数'),
+                            const Text(AppStrings.loopCount),
                             Slider(
                               value: controller.loopCount.toDouble(),
                               min: 1,
@@ -1624,14 +1625,14 @@ class _EditorScreenState extends State<EditorScreen> {
                             ),
                             Align(
                               alignment: Alignment.centerRight,
-                              child: Text('${controller.loopCount}回'),
+                              child: Text(AppStrings.loopCountValue(controller.loopCount)),
                             ),
                           ],
                           const Divider(height: 24),
                           DropdownButtonFormField<GifQualityPreset>(
                             initialValue: controller.gifQualityPreset,
                             decoration:
-                                const InputDecoration(labelText: 'GIF品質'),
+                                const InputDecoration(labelText: AppStrings.gifQuality),
                             items: GifQualityPreset.values
                                 .map(
                                   (preset) =>
@@ -1652,7 +1653,7 @@ class _EditorScreenState extends State<EditorScreen> {
                           DropdownButtonFormField<GifFpsPreset>(
                             initialValue: controller.gifFpsPreset,
                             decoration: const InputDecoration(
-                              labelText: 'GIF FPS',
+                              labelText: AppStrings.gifFps,
                             ),
                             items: GifFpsPreset.values
                                 .map(
@@ -1674,7 +1675,7 @@ class _EditorScreenState extends State<EditorScreen> {
                             key: const Key('output-name-template-field'),
                             controller: templateController,
                             decoration: const InputDecoration(
-                              labelText: '書き出しファイル名テンプレート（拡張子なし）',
+                              labelText: AppStrings.fileNameTemplate,
                               border: OutlineInputBorder(),
                             ),
                             onChanged: (value) {
@@ -1685,15 +1686,13 @@ class _EditorScreenState extends State<EditorScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            '使用できる変数: {looptype}, {filename}\n'
-                            '例: {looptype}_{filename}\n'
-                            '出力例: loop_sample.mp4 / pingpongLoop_sample.gif / snapshot_sample.jpg',
+                            AppStrings.fileNameTemplateHelp,
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                           const Divider(height: 24),
                           _buildPathSettingRow(
                             fieldKey: const Key('image-export-path-field'),
-                            label: '画像書き出しパス',
+                            label: AppStrings.imageExportPath,
                             controller: imagePathController,
                             enabled:
                                 !(_isMobilePlatform && _saveToPhotoLibrary),
@@ -1704,7 +1703,7 @@ class _EditorScreenState extends State<EditorScreen> {
                             },
                             onPick: () async {
                               final selected = await _selectDirectory(
-                                '画像書き出しフォルダを選択',
+                                AppStrings.pickImageExportFolder,
                               );
                               if (selected == null) {
                                 return;
@@ -1719,7 +1718,7 @@ class _EditorScreenState extends State<EditorScreen> {
                           const SizedBox(height: 8),
                           _buildPathSettingRow(
                             fieldKey: const Key('video-export-path-field'),
-                            label: '動画書き出しパス',
+                            label: AppStrings.videoExportPath,
                             controller: videoPathController,
                             enabled:
                                 !(_isMobilePlatform && _saveToPhotoLibrary),
@@ -1730,7 +1729,7 @@ class _EditorScreenState extends State<EditorScreen> {
                             },
                             onPick: () async {
                               final selected = await _selectDirectory(
-                                '動画書き出しフォルダを選択',
+                                AppStrings.pickVideoExportFolder,
                               );
                               if (selected == null) {
                                 return;
@@ -1745,7 +1744,7 @@ class _EditorScreenState extends State<EditorScreen> {
                           const SizedBox(height: 8),
                           _buildPathSettingRow(
                             fieldKey: const Key('gif-export-path-field'),
-                            label: 'GIF書き出しパス',
+                            label: AppStrings.gifExportPath,
                             controller: gifPathController,
                             enabled:
                                 !(_isMobilePlatform && _saveToPhotoLibrary),
@@ -1755,7 +1754,7 @@ class _EditorScreenState extends State<EditorScreen> {
                             },
                             onPick: () async {
                               final selected = await _selectDirectory(
-                                'GIF書き出しフォルダを選択',
+                                AppStrings.pickGifExportFolder,
                               );
                               if (selected == null) {
                                 return;
@@ -1771,7 +1770,7 @@ class _EditorScreenState extends State<EditorScreen> {
                             const Divider(height: 24),
                             SwitchListTile(
                               contentPadding: EdgeInsets.zero,
-                              title: const Text('フォトライブラリに直接保存'),
+                              title: const Text(AppStrings.saveToPhotoLibraryDirectly),
                               value: _saveToPhotoLibrary,
                               onChanged: (value) {
                                 _saveToPhotoLibrary = value;
@@ -1785,9 +1784,9 @@ class _EditorScreenState extends State<EditorScreen> {
                           SwitchListTile(
                             contentPadding: EdgeInsets.zero,
                             title: const Text(
-                                'Liquid Glass UI \u3092\u6709\u52b9\u5316'),
+                                AppStrings.enableLiquidGlassUi),
                             subtitle: const Text(
-                                '\u91cd\u3044\u5834\u5408\u306f OFF \u306b\u3057\u3066\u304f\u3060\u3055\u3044'),
+                                AppStrings.liquidGlassPerformanceHint),
                             value: LiquidGlassRefs.isLiquidGlassEnabledByUser,
                             onChanged: (value) {
                               LiquidGlassRefs.setUserLiquidGlassEnabled(value);
@@ -1803,7 +1802,7 @@ class _EditorScreenState extends State<EditorScreen> {
                   actions: <Widget>[
                     TextButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('閉じる'),
+                      child: const Text(AppStrings.close),
                     ),
                   ],
                 );
@@ -1839,14 +1838,14 @@ class _EditorScreenState extends State<EditorScreen> {
             decoration: InputDecoration(
               labelText: label,
               border: const OutlineInputBorder(),
-              hintText: enabled ? '書き出し先パスを入力' : 'フォトライブラリ保存時は不要',
+              hintText: enabled ? AppStrings.enterExportPath : AppStrings.exportPathNotNeededForPhotoLibrary,
             ),
           ),
         ),
         const SizedBox(width: 8),
         OutlinedButton(
           onPressed: enabled ? () => unawaited(onPick()) : null,
-          child: const Text('選択'),
+          child: const Text(AppStrings.select),
         ),
       ],
     );
@@ -1897,7 +1896,7 @@ class _EditorScreenState extends State<EditorScreen> {
                     : () => _exportCurrentFrame(controller),
                 icon: const Icon(Icons.image_rounded),
                 label: Text(
-                  isMobile ? 'フレーム書き出し' : 'このフレームを画像書き出し',
+                  isMobile ? AppStrings.frameExport : AppStrings.exportCurrentFrameImage,
                 ),
               ),
             ),
@@ -1918,14 +1917,14 @@ class _EditorScreenState extends State<EditorScreen> {
                     ? null
                     : () => _startExport(controller),
                 icon: const Icon(Icons.movie_creation_rounded),
-                label: const Text('書き出し'),
+                label: const Text(AppStrings.export),
               ),
             ),
             const SizedBox(width: LiquidGlassRefs.exportButtonGap),
             InteractiveLiquidGlassIconButton(
               buttonKey: const Key('export-settings-button'),
               icon: Icons.settings,
-              tooltip: '書き出し設定',
+              tooltip: AppStrings.exportSettingsTooltip,
               isDisabled: exportActionDisabled,
               onPressed: () => _showExportSettingsModal(controller),
               useLiquidGlass: LiquidGlassRefs.supportsLiquidGlass,
@@ -1946,7 +1945,7 @@ class _EditorScreenState extends State<EditorScreen> {
           const SizedBox(height: 6),
           Text(
             controller.isFrameExporting
-                ? 'フレーム画像を書き出し中...'
+                ? AppStrings.frameImageExporting
                 : '${(controller.exportProgress * 100).toStringAsFixed(0)}% ${controller.exportMessage}',
           ),
         ],
@@ -1954,8 +1953,8 @@ class _EditorScreenState extends State<EditorScreen> {
           const SizedBox(height: 8),
           Text(
             _lastVideoExportToPhotoLibrary
-                ? '出力先: フォトライブラリ'
-                : '出力先: ${controller.lastOutputPath}',
+                ? AppStrings.outputToPhotoLibrary
+                : AppStrings.outputToPath(controller.lastOutputPath!),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -1966,7 +1965,7 @@ class _EditorScreenState extends State<EditorScreen> {
                 unawaited(_openLastOutputDestination(controller));
               },
               icon: const Icon(Icons.folder_open_rounded),
-              label: const Text('保存先を開く'),
+              label: const Text(AppStrings.openOutputDestination),
             ),
           ),
         ],
@@ -1974,8 +1973,8 @@ class _EditorScreenState extends State<EditorScreen> {
           const SizedBox(height: 8),
           Text(
             _lastFrameExportToPhotoLibrary
-                ? '画像出力先: フォトライブラリ'
-                : '画像出力先: ${controller.lastFrameOutputPath}',
+                ? AppStrings.frameOutputToPhotoLibrary
+                : AppStrings.frameOutputToPath(controller.lastFrameOutputPath!),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -1986,7 +1985,7 @@ class _EditorScreenState extends State<EditorScreen> {
                 unawaited(_openLastFrameDestination(controller));
               },
               icon: const Icon(Icons.image_search_rounded),
-              label: const Text('保存先を開く'),
+              label: const Text(AppStrings.openOutputDestination),
             ),
           ),
         ],
