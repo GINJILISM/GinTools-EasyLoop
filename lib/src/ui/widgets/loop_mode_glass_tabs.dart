@@ -137,28 +137,14 @@ class LoopModeGlassTabs extends StatelessWidget {
   }
 
   Widget _buildActiveThumb({required bool useLiquidGlass}) {
-    if (!useLiquidGlass) {
-      return DecoratedBox(
-        decoration: BoxDecoration(
-          color: const Color(0xFF3D8BB8).withValues(alpha: 0.9),
-          borderRadius:
-              BorderRadius.circular(LiquidGlassRefs.loopTabsInnerRadius),
-        ),
-      );
-    }
-
-    return LiquidGlass.grouped(
-      shape: const LiquidRoundedSuperellipse(
-        borderRadius: LiquidGlassRefs.loopTabsInnerRadius,
-      ),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: LiquidGlassRefs.accentBlue.withValues(
-            alpha: LiquidGlassRefs.isIOSPlatform ? 0.82 : 1,
-          ),
-          borderRadius:
-              BorderRadius.circular(LiquidGlassRefs.loopTabsInnerRadius),
-        ),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: useLiquidGlass
+            ? LiquidGlassRefs.accentBlue.withValues(
+                alpha: LiquidGlassRefs.isIOSPlatform ? 0.86 : 0.94,
+              )
+            : const Color(0xFF3D8BB8).withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(LiquidGlassRefs.loopTabsInnerRadius),
       ),
     );
   }
@@ -168,8 +154,7 @@ class LoopModeGlassTabs extends StatelessWidget {
     required String tooltip,
   }) {
     final selected = _selection == selection;
-    final iconColor =
-        selected ? LiquidGlassRefs.textPrimary : const Color(0xFF3D8BB8);
+    final iconColor = selected ? Colors.white : const Color(0xFF3D8BB8);
 
     return Expanded(
       child: Tooltip(

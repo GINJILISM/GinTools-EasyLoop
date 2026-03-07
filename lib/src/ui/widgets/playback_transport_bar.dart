@@ -36,8 +36,12 @@ class PlaybackTransportBar extends StatelessWidget {
         ? LiquidGlassRefs.transportLayerSettingsWindows
         : LiquidGlassRefs.transportLayerSettings;
 
+    final alignedButtonHeight = LiquidGlassRefs.transportPrimaryButtonSize;
+
     final buttons = <Widget>[
-      InteractiveLiquidGlassIconButton(
+      _centerAlignedButton(
+        height: alignedButtonHeight,
+        child: InteractiveLiquidGlassIconButton(
         buttonKey: const Key('transport-set-start'),
         icon: Icons.first_page_rounded,
         tooltip: '現在位置を開始点に設定',
@@ -48,7 +52,10 @@ class PlaybackTransportBar extends StatelessWidget {
         backgroundColor: LiquidGlassRefs.transportBoundaryButtonColor,
         foregroundColor: LiquidGlassRefs.textPrimary,
       ),
-      InteractiveLiquidGlassIconButton(
+      ),
+      _centerAlignedButton(
+        height: alignedButtonHeight,
+        child: InteractiveLiquidGlassIconButton(
         buttonKey: const Key('transport-trim-start'),
         icon: Icons.skip_previous_rounded,
         tooltip: '開始点へ移動',
@@ -59,7 +66,10 @@ class PlaybackTransportBar extends StatelessWidget {
         backgroundColor: LiquidGlassRefs.transportSecondaryButtonColor,
         foregroundColor: LiquidGlassRefs.textPrimary,
       ),
-      InteractiveLiquidGlassIconButton(
+      ),
+      _centerAlignedButton(
+        height: alignedButtonHeight,
+        child: InteractiveLiquidGlassIconButton(
         buttonKey: const Key('transport-frame-prev'),
         icon: Icons.fast_rewind_rounded,
         tooltip: '1フレーム戻る',
@@ -70,7 +80,10 @@ class PlaybackTransportBar extends StatelessWidget {
         backgroundColor: LiquidGlassRefs.transportSecondaryButtonColor,
         foregroundColor: LiquidGlassRefs.textPrimary,
       ),
-      InteractiveLiquidGlassIconButton(
+      ),
+      _centerAlignedButton(
+        height: alignedButtonHeight,
+        child: InteractiveLiquidGlassIconButton(
         buttonKey: const Key('transport-play-pause'),
         icon: isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
         tooltip: isPlaying ? '一時停止' : '再生',
@@ -82,7 +95,10 @@ class PlaybackTransportBar extends StatelessWidget {
         backgroundColor: LiquidGlassRefs.accentOrange,
         foregroundColor: Colors.white,
       ),
-      InteractiveLiquidGlassIconButton(
+      ),
+      _centerAlignedButton(
+        height: alignedButtonHeight,
+        child: InteractiveLiquidGlassIconButton(
         buttonKey: const Key('transport-frame-next'),
         icon: Icons.fast_forward_rounded,
         tooltip: '1フレーム進む',
@@ -93,7 +109,10 @@ class PlaybackTransportBar extends StatelessWidget {
         backgroundColor: LiquidGlassRefs.transportSecondaryButtonColor,
         foregroundColor: LiquidGlassRefs.textPrimary,
       ),
-      InteractiveLiquidGlassIconButton(
+      ),
+      _centerAlignedButton(
+        height: alignedButtonHeight,
+        child: InteractiveLiquidGlassIconButton(
         buttonKey: const Key('transport-trim-end'),
         icon: Icons.skip_next_rounded,
         tooltip: '終了点へ移動',
@@ -104,7 +123,10 @@ class PlaybackTransportBar extends StatelessWidget {
         backgroundColor: LiquidGlassRefs.transportSecondaryButtonColor,
         foregroundColor: LiquidGlassRefs.textPrimary,
       ),
-      InteractiveLiquidGlassIconButton(
+      ),
+      _centerAlignedButton(
+        height: alignedButtonHeight,
+        child: InteractiveLiquidGlassIconButton(
         buttonKey: const Key('transport-set-end'),
         icon: Icons.last_page_rounded,
         tooltip: '現在位置を終了点に設定',
@@ -115,28 +137,19 @@ class PlaybackTransportBar extends StatelessWidget {
         backgroundColor: LiquidGlassRefs.transportBoundaryButtonColor,
         foregroundColor: LiquidGlassRefs.textPrimary,
       ),
+      ),
     ];
 
-    final buttonsCore = LayoutBuilder(
-      builder: (context, constraints) {
-        final isCompact =
-            constraints.maxWidth < LiquidGlassRefs.transportCompactWidth;
-        if (!isCompact) {
-          return Row(
-            mainAxisSize: MainAxisSize.min,
-            children: _withSpacing(
-              buttons,
-              spacing: LiquidGlassRefs.transportButtonBlendSpacing,
-            ),
-          );
-        }
-        return Wrap(
-          alignment: WrapAlignment.center,
+    final buttonsCore = SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: _withSpacing(
+          buttons,
           spacing: LiquidGlassRefs.transportButtonBlendSpacing,
-          runSpacing: LiquidGlassRefs.transportButtonBlendSpacing,
-          children: buttons,
-        );
-      },
+        ),
+      ),
     );
 
     final groupedButtons = Padding(
@@ -161,6 +174,16 @@ class PlaybackTransportBar extends StatelessWidget {
         blend: LiquidGlassRefs.transportButtonsBlend,
         child: groupedButtons,
       ),
+    );
+  }
+
+  Widget _centerAlignedButton({
+    required double height,
+    required Widget child,
+  }) {
+    return SizedBox(
+      height: height,
+      child: Center(child: child),
     );
   }
 
