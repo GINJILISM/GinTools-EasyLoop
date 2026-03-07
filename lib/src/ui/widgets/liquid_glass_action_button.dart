@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
+import '../../design/typography/app_font_roles.dart';
 import '../liquid_glass/liquid_glass_refs.dart';
 
 class LiquidGlassActionButton extends StatelessWidget {
@@ -33,6 +34,9 @@ class LiquidGlassActionButton extends StatelessWidget {
     final isIOSPlatform = LiquidGlassRefs.isIOSPlatform;
     final enabled = onPressed != null;
     final colorScheme = Theme.of(context).colorScheme;
+    final actionLabelBaseStyle = AppFontRoles.actionButtonLabel(
+      Theme.of(context).textTheme.labelLarge,
+    );
 
     final resolvedForegroundColor = foregroundColor ??
         (primary ? colorScheme.primary : colorScheme.onSurface);
@@ -47,9 +51,7 @@ class LiquidGlassActionButton extends StatelessWidget {
         child: CupertinoButton(
           onPressed: onPressed,
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          color: primary
-              ? (fillColor ?? colorScheme.primary)
-              : fillColor,
+          color: primary ? (fillColor ?? colorScheme.primary) : fillColor,
           borderRadius: BorderRadius.circular(
             LiquidGlassRefs.exportButtonRadius,
           ),
@@ -64,10 +66,14 @@ class LiquidGlassActionButton extends StatelessWidget {
               const SizedBox(width: 8),
               Flexible(
                 child: DefaultTextStyle(
-                  style: TextStyle(
-                    color: effectiveFg,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: actionLabelBaseStyle?.copyWith(
+                        color: effectiveFg,
+                        fontWeight: FontWeight.w600,
+                      ) ??
+                      TextStyle(
+                        color: effectiveFg,
+                        fontWeight: FontWeight.w600,
+                      ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   child: label,
@@ -89,6 +95,7 @@ class LiquidGlassActionButton extends StatelessWidget {
               FilledButton.styleFrom(
                 backgroundColor: fillColor,
                 foregroundColor: resolvedForegroundColor,
+                textStyle: actionLabelBaseStyle,
                 side: borderColor != null
                     ? BorderSide(color: borderColor!)
                     : null,
@@ -103,6 +110,7 @@ class LiquidGlassActionButton extends StatelessWidget {
             OutlinedButton.styleFrom(
               backgroundColor: fillColor,
               foregroundColor: resolvedForegroundColor,
+              textStyle: actionLabelBaseStyle,
               side:
                   borderColor != null ? BorderSide(color: borderColor!) : null,
             ),
@@ -146,10 +154,14 @@ class LiquidGlassActionButton extends StatelessWidget {
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: DefaultTextStyle(
-                        style: TextStyle(
-                          color: enabled ? fg : disabledFg,
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: actionLabelBaseStyle?.copyWith(
+                              color: enabled ? fg : disabledFg,
+                              fontWeight: FontWeight.w600,
+                            ) ??
+                            TextStyle(
+                              color: enabled ? fg : disabledFg,
+                              fontWeight: FontWeight.w600,
+                            ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         child: label,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../design/typography/app_font_roles.dart';
 import '../liquid_glass/liquid_glass_refs.dart';
 import '../app_strings.dart';
 
@@ -7,10 +8,12 @@ Future<bool> showReplaceInputDialog(BuildContext context) async {
   final shouldReplace = await showDialog<bool>(
     context: context,
     builder: (context) {
-      final titleStyle = Theme.of(context).textTheme.headlineSmall?.copyWith(
-            color: LiquidGlassRefs.textPrimary,
-            fontWeight: FontWeight.w600,
-          );
+      final titleStyle = AppFontRoles.dialogTitle(
+        Theme.of(context).textTheme.headlineSmall,
+      )?.copyWith(
+        color: LiquidGlassRefs.textPrimary,
+        fontWeight: FontWeight.w600,
+      );
       final bodyStyle = Theme.of(context).textTheme.bodyLarge?.copyWith(
             color: LiquidGlassRefs.textSecondary,
             height: 1.4,
@@ -36,6 +39,9 @@ Future<bool> showReplaceInputDialog(BuildContext context) async {
             onPressed: () => Navigator.of(context).pop(false),
             style: TextButton.styleFrom(
               foregroundColor: LiquidGlassRefs.textSecondary,
+              textStyle: AppFontRoles.actionButtonLabel(
+                Theme.of(context).textTheme.labelLarge,
+              ),
             ),
             child: const Text(AppStrings.cancel),
           ),
@@ -44,6 +50,9 @@ Future<bool> showReplaceInputDialog(BuildContext context) async {
             style: FilledButton.styleFrom(
               backgroundColor: LiquidGlassRefs.accentBlue,
               foregroundColor: Colors.white,
+              textStyle: AppFontRoles.actionButtonLabel(
+                Theme.of(context).textTheme.labelLarge,
+              ),
             ),
             child: const Text(AppStrings.replace),
           ),

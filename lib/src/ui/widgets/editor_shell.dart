@@ -121,7 +121,8 @@ class EditorShell extends StatelessWidget {
     final body = SafeArea(
       top: false,
       bottom: true,
-      minimum: EdgeInsets.only(bottom: (isCompact ? 8 : 4) + viewPadding.bottom),
+      minimum:
+          EdgeInsets.only(bottom: (isCompact ? 8 : 4) + viewPadding.bottom),
       child: Padding(
         padding: EdgeInsets.symmetric(
           horizontal: isCompact ? 12 : 12,

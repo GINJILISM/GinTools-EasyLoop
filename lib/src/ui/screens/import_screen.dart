@@ -4,6 +4,7 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../design/typography/app_font_roles.dart';
 import '../../services/file_import_service.dart';
 import '../liquid_glass/liquid_glass_refs.dart';
 import '../app_strings.dart';
@@ -76,6 +77,9 @@ class _ImportScreenState extends State<ImportScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final primaryActionTextStyle = AppFontRoles.actionButtonLabel(
+      Theme.of(context).textTheme.labelLarge,
+    );
     final panel = Container(
       width: 860,
       padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
@@ -96,18 +100,12 @@ class _ImportScreenState extends State<ImportScreen> {
         children: <Widget>[
           Text(
             AppStrings.importScreenTitle,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: LiquidGlassRefs.textPrimary,
-                  fontWeight: FontWeight.w600,
-                ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            AppStrings.importScreenDescription,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: LiquidGlassRefs.textSecondary,
-                ),
+            style: AppFontRoles.screenHeadline(
+              Theme.of(context).textTheme.headlineSmall,
+            )?.copyWith(
+              color: LiquidGlassRefs.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 18),
@@ -121,6 +119,7 @@ class _ImportScreenState extends State<ImportScreen> {
                 style: FilledButton.styleFrom(
                   backgroundColor: LiquidGlassRefs.accentOrange,
                   foregroundColor: Colors.white,
+                  textStyle: primaryActionTextStyle,
                 ),
                 child: const Text(AppStrings.openFromFile),
               ),
@@ -129,6 +128,7 @@ class _ImportScreenState extends State<ImportScreen> {
                 style: FilledButton.styleFrom(
                   backgroundColor: LiquidGlassRefs.accentOrangeMuted,
                   foregroundColor: LiquidGlassRefs.textPrimary,
+                  textStyle: primaryActionTextStyle,
                 ),
                 child: const Text(AppStrings.openFromLibrary),
               ),

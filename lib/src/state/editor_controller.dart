@@ -92,9 +92,8 @@ class EditorController extends ChangeNotifier {
       }
     }
 
-    playheadSeconds = playheadSeconds
-        .clamp(trimStartSeconds, trimEndSeconds)
-        .toDouble();
+    playheadSeconds =
+        playheadSeconds.clamp(trimStartSeconds, trimEndSeconds).toDouble();
     notifyListeners();
   }
 
@@ -132,9 +131,8 @@ class EditorController extends ChangeNotifier {
 
     trimStartSeconds = 0;
     trimEndSeconds = nextEnd.toDouble();
-    playheadSeconds = playheadSeconds
-        .clamp(trimStartSeconds, trimEndSeconds)
-        .toDouble();
+    playheadSeconds =
+        playheadSeconds.clamp(trimStartSeconds, trimEndSeconds).toDouble();
     notifyListeners();
   }
 
@@ -161,30 +159,26 @@ class EditorController extends ChangeNotifier {
     trimStartSeconds = nextStart;
     trimEndSeconds = nextEnd;
     _hasUserEditedTrim = true;
-    playheadSeconds = playheadSeconds
-        .clamp(trimStartSeconds, trimEndSeconds)
-        .toDouble();
+    playheadSeconds =
+        playheadSeconds.clamp(trimStartSeconds, trimEndSeconds).toDouble();
     notifyListeners();
   }
 
   void seekTo(double seconds) {
-    playheadSeconds = seconds
-        .clamp(0.0, totalDuration.inMilliseconds / 1000)
-        .toDouble();
+    playheadSeconds =
+        seconds.clamp(0.0, totalDuration.inMilliseconds / 1000).toDouble();
     notifyListeners();
   }
 
   void setPlayheadFromScrub(double seconds) {
-    playheadSeconds = seconds
-        .clamp(0.0, totalDuration.inMilliseconds / 1000)
-        .toDouble();
+    playheadSeconds =
+        seconds.clamp(0.0, totalDuration.inMilliseconds / 1000).toDouble();
     notifyListeners();
   }
 
   void updatePlayhead(double seconds) {
-    final next = seconds
-        .clamp(0.0, totalDuration.inMilliseconds / 1000)
-        .toDouble();
+    final next =
+        seconds.clamp(0.0, totalDuration.inMilliseconds / 1000).toDouble();
     if ((next - playheadSeconds).abs() < 0.10) {
       return;
     }
@@ -231,15 +225,16 @@ class EditorController extends ChangeNotifier {
     required String inputPath,
     required String outputPath,
   }) async {
+    final formatLabel = exportFormat.label;
     if (!canExport) {
-      errorMessage = AppStrings.exportUnavailable;
+      errorMessage = AppStrings.exportUnavailableForFormat(formatLabel);
       notifyListeners();
       return false;
     }
 
     isExporting = true;
     exportProgress = 0;
-    exportMessage = AppStrings.exportStarting;
+    exportMessage = AppStrings.exportStartingForFormat(formatLabel);
     errorMessage = null;
     lastOutputPath = null;
     notifyListeners();
@@ -269,7 +264,7 @@ class EditorController extends ChangeNotifier {
 
       lastOutputPath = generatedPath;
       exportProgress = 1;
-      exportMessage = AppStrings.exportCompleted;
+      exportMessage = AppStrings.exportCompletedForFormat(formatLabel);
       notifyListeners();
       return true;
     } on ExportException catch (error) {
@@ -277,7 +272,10 @@ class EditorController extends ChangeNotifier {
       notifyListeners();
       return false;
     } catch (error) {
-      errorMessage = AppStrings.unexpectedExportError(error);
+      errorMessage = AppStrings.unexpectedExportErrorForFormat(
+        formatLabel,
+        error,
+      );
       notifyListeners();
       return false;
     } finally {
@@ -336,9 +334,9 @@ class EditorController extends ChangeNotifier {
   Future<String> _defaultFrameOutputPath() async {
     final docsDir = await getApplicationDocumentsDirectory();
     final timestamp = DateTime.now().toIso8601String().replaceAll(
-      RegExp('[:.]'),
-      '-',
-    );
+          RegExp('[:.]'),
+          '-',
+        );
     return p.join(docsDir.path, 'frame_$timestamp.jpg');
   }
 }

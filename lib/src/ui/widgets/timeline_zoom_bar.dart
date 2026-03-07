@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../design/typography/app_font_roles.dart';
 import '../liquid_glass/liquid_glass_refs.dart';
 import '../app_strings.dart';
 
@@ -17,9 +18,11 @@ class TimelineZoomBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final activeColor = Color.fromRGBO(245, 107, 61, 0.6);
     final inactiveColor = LiquidGlassRefs.surfaceDeep.withValues(alpha: 0.55);
-    final labelStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: LiquidGlassRefs.textPrimary,
-        );
+    final labelStyle = AppFontRoles.screenHeadline(
+      Theme.of(context).textTheme.bodyMedium,
+    )?.copyWith(
+      color: LiquidGlassRefs.textPrimary,
+    );
 
     return Row(
       children: <Widget>[
@@ -32,7 +35,7 @@ class TimelineZoomBar extends StatelessWidget {
               inactiveTrackColor: inactiveColor,
               thumbColor: activeColor,
               overlayColor: activeColor.withValues(alpha: 0.22),
-              valueIndicatorColor:Color.fromRGBO(245, 107, 61, 0.6),
+              valueIndicatorColor: Color.fromRGBO(245, 107, 61, 0.6),
               valueIndicatorTextStyle: const TextStyle(color: Colors.white),
               trackHeight: 4,
             ),

@@ -148,6 +148,31 @@ void main() {
     expect(controller.lastOutputPath, 'out.mp4');
   });
 
+  test('書き出し文言が選択フォーマットに追従する', () async {
+    final controller = EditorController(videoProcessor: _FakeProcessor());
+
+    controller.setExportFormat(ExportFormat.gif);
+    final unavailable = await controller.export(
+      inputPath: 'in.mp4',
+      outputPath: 'out.gif',
+    );
+
+    expect(unavailable, isFalse);
+    expect(controller.errorMessage, 'GIFを書き出し可能な状態ではありません。');
+
+    controller.setTotalDuration(const Duration(seconds: 10));
+    controller.setTrimRange(startSeconds: 0.0, endSeconds: 5.0);
+
+    final ok = await controller.export(
+      inputPath: 'in.mp4',
+      outputPath: 'out.gif',
+    );
+
+    expect(ok, isTrue);
+    expect(controller.exportMessage, 'GIF書き出しが完了しました。');
+    expect(controller.lastOutputPath, 'out.gif');
+  });
+
   test('現在フレームのJPG書き出しが成功する', () async {
     final controller = EditorController(videoProcessor: _FakeProcessor());
     controller.setTotalDuration(const Duration(seconds: 10));

@@ -15,6 +15,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../design/typography/app_font_roles.dart';
 import '../../models/export_format.dart';
 import '../../models/gif_export_options.dart';
 import '../../models/loop_mode.dart';
@@ -983,7 +984,11 @@ class _EditorScreenState extends State<EditorScreen> {
         if (mounted) setState(() {});
         messenger.showSnackBar(
           SnackBar(
-            content: Text(AppStrings.exportDoneSnackbar),
+            content: Text(
+              AppStrings.exportDoneSnackbarForFormat(
+                controller.exportFormat.label,
+              ),
+            ),
             behavior: _snackBarBehavior,
           ),
         );
@@ -1205,7 +1210,7 @@ class _EditorScreenState extends State<EditorScreen> {
         ? _gifExportDirectory
         : _videoExportDirectory;
     if (directory == null || directory.trim().isEmpty) {
-      _showPathRequiredMessage();
+      _showPathRequiredMessage(format == ExportFormat.gif ? 'GIF' : 'MP4');
       return null;
     }
     return _outputFileNamingService.buildOutputPath(
@@ -1231,7 +1236,7 @@ class _EditorScreenState extends State<EditorScreen> {
 
     final directory = _imageExportDirectory;
     if (directory == null || directory.trim().isEmpty) {
-      _showPathRequiredMessage();
+      _showPathRequiredMessage('画像');
       return null;
     }
     return _outputFileNamingService.buildOutputPath(
@@ -1243,13 +1248,13 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
-  void _showPathRequiredMessage() {
+  void _showPathRequiredMessage(String targetLabel) {
     if (!mounted) {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(AppStrings.setExportPath),
+        content: Text(AppStrings.setExportPathForTarget(targetLabel)),
         behavior: _snackBarBehavior,
       ),
     );
@@ -1449,12 +1454,7 @@ class _EditorScreenState extends State<EditorScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    if (_isMobilePlatform)
-                      Text(
-                        AppStrings.timelineGestureHint,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      )
-                    else
+                    if (!_isMobilePlatform)
                       TimelineZoomBar(
                         zoomLevel: controller.zoomLevel,
                         onChanged: controller.isExporting
@@ -1560,6 +1560,16 @@ class _EditorScreenState extends State<EditorScreen> {
             ),
             child: StatefulBuilder(
               builder: (context, setModalState) {
+                final isGifExport = controller.exportFormat == ExportFormat.gif;
+                final exportPathController =
+                    isGifExport ? gifPathController : videoPathController;
+                final exportPathLabel = isGifExport
+                    ? AppStrings.gifExportPath
+                    : AppStrings.mp4ExportPath;
+                final exportPathPickerTitle = isGifExport
+                    ? AppStrings.pickGifExportFolder
+                    : AppStrings.pickMp4ExportFolder;
+
                 return AlertDialog(
                   backgroundColor:
                       LiquidGlassRefs.surfaceDeep.withValues(alpha: 0.96),
@@ -1568,11 +1578,12 @@ class _EditorScreenState extends State<EditorScreen> {
                     borderRadius: BorderRadius.circular(28),
                     side: const BorderSide(color: LiquidGlassRefs.outlineSoft),
                   ),
-                  titleTextStyle:
-                      Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            color: LiquidGlassRefs.textPrimary,
-                            fontWeight: FontWeight.w600,
-                          ),
+                  titleTextStyle: AppFontRoles.dialogTitle(
+                    Theme.of(context).textTheme.headlineSmall,
+                  )?.copyWith(
+                    color: LiquidGlassRefs.textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
                   contentTextStyle:
                       Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: LiquidGlassRefs.textPrimary,
@@ -1607,8 +1618,7 @@ class _EditorScreenState extends State<EditorScreen> {
                             },
                           ),
                           const SizedBox(height: 12),
-                          if (controller.exportFormat ==
-                              ExportFormat.mp4) ...<Widget>[
+                          if (!isGifExport) ...<Widget>[
                             const Text(AppStrings.loopCount),
                             Slider(
                               value: controller.loopCount.toDouble(),
@@ -1625,51 +1635,54 @@ class _EditorScreenState extends State<EditorScreen> {
                             ),
                             Align(
                               alignment: Alignment.centerRight,
-                              child: Text(AppStrings.loopCountValue(controller.loopCount)),
+                              child: Text(AppStrings.loopCountValue(
+                                  controller.loopCount)),
                             ),
                           ],
-                          const Divider(height: 24),
-                          DropdownButtonFormField<GifQualityPreset>(
-                            initialValue: controller.gifQualityPreset,
-                            decoration:
-                                const InputDecoration(labelText: AppStrings.gifQuality),
-                            items: GifQualityPreset.values
-                                .map(
-                                  (preset) =>
-                                      DropdownMenuItem<GifQualityPreset>(
-                                    value: preset,
-                                    child: Text(preset.label),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (value) {
-                              if (value == null) return;
-                              controller.setGifQualityPreset(value);
-                              _schedulePersistExportSettings();
-                              setModalState(() {});
-                            },
-                          ),
-                          const SizedBox(height: 12),
-                          DropdownButtonFormField<GifFpsPreset>(
-                            initialValue: controller.gifFpsPreset,
-                            decoration: const InputDecoration(
-                              labelText: AppStrings.gifFps,
+                          if (isGifExport) ...<Widget>[
+                            const Divider(height: 24),
+                            DropdownButtonFormField<GifQualityPreset>(
+                              initialValue: controller.gifQualityPreset,
+                              decoration: const InputDecoration(
+                                  labelText: AppStrings.gifQuality),
+                              items: GifQualityPreset.values
+                                  .map(
+                                    (preset) =>
+                                        DropdownMenuItem<GifQualityPreset>(
+                                      value: preset,
+                                      child: Text(preset.label),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (value) {
+                                if (value == null) return;
+                                controller.setGifQualityPreset(value);
+                                _schedulePersistExportSettings();
+                                setModalState(() {});
+                              },
                             ),
-                            items: GifFpsPreset.values
-                                .map(
-                                  (preset) => DropdownMenuItem<GifFpsPreset>(
-                                    value: preset,
-                                    child: Text(preset.label),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (value) {
-                              if (value == null) return;
-                              controller.setGifFpsPreset(value);
-                              _schedulePersistExportSettings();
-                              setModalState(() {});
-                            },
-                          ),
+                            const SizedBox(height: 12),
+                            DropdownButtonFormField<GifFpsPreset>(
+                              initialValue: controller.gifFpsPreset,
+                              decoration: const InputDecoration(
+                                labelText: AppStrings.gifFps,
+                              ),
+                              items: GifFpsPreset.values
+                                  .map(
+                                    (preset) => DropdownMenuItem<GifFpsPreset>(
+                                      value: preset,
+                                      child: Text(preset.label),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (value) {
+                                if (value == null) return;
+                                controller.setGifFpsPreset(value);
+                                _schedulePersistExportSettings();
+                                setModalState(() {});
+                              },
+                            ),
+                          ],
                           const Divider(height: 24),
                           TextFormField(
                             key: const Key('output-name-template-field'),
@@ -1686,7 +1699,9 @@ class _EditorScreenState extends State<EditorScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            AppStrings.fileNameTemplateHelp,
+                            AppStrings.fileNameTemplateHelpForFormat(
+                              controller.exportFormat.extension,
+                            ),
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                           const Divider(height: 24),
@@ -1717,50 +1732,38 @@ class _EditorScreenState extends State<EditorScreen> {
                           ),
                           const SizedBox(height: 8),
                           _buildPathSettingRow(
-                            fieldKey: const Key('video-export-path-field'),
-                            label: AppStrings.videoExportPath,
-                            controller: videoPathController,
+                            fieldKey: Key(
+                              isGifExport
+                                  ? 'gif-export-path-field'
+                                  : 'video-export-path-field',
+                            ),
+                            label: exportPathLabel,
+                            controller: exportPathController,
                             enabled:
                                 !(_isMobilePlatform && _saveToPhotoLibrary),
                             onChanged: (value) {
-                              _videoExportDirectory =
-                                  _normalizeDirectory(value);
+                              if (isGifExport) {
+                                _gifExportDirectory =
+                                    _normalizeDirectory(value);
+                              } else {
+                                _videoExportDirectory =
+                                    _normalizeDirectory(value);
+                              }
                               _schedulePersistExportSettings();
                             },
                             onPick: () async {
                               final selected = await _selectDirectory(
-                                AppStrings.pickVideoExportFolder,
+                                exportPathPickerTitle,
                               );
                               if (selected == null) {
                                 return;
                               }
-                              videoPathController.text = selected;
-                              _videoExportDirectory = selected;
-                              _schedulePersistExportSettings();
-                              setModalState(() {});
-                              if (mounted) setState(() {});
-                            },
-                          ),
-                          const SizedBox(height: 8),
-                          _buildPathSettingRow(
-                            fieldKey: const Key('gif-export-path-field'),
-                            label: AppStrings.gifExportPath,
-                            controller: gifPathController,
-                            enabled:
-                                !(_isMobilePlatform && _saveToPhotoLibrary),
-                            onChanged: (value) {
-                              _gifExportDirectory = _normalizeDirectory(value);
-                              _schedulePersistExportSettings();
-                            },
-                            onPick: () async {
-                              final selected = await _selectDirectory(
-                                AppStrings.pickGifExportFolder,
-                              );
-                              if (selected == null) {
-                                return;
+                              exportPathController.text = selected;
+                              if (isGifExport) {
+                                _gifExportDirectory = selected;
+                              } else {
+                                _videoExportDirectory = selected;
                               }
-                              gifPathController.text = selected;
-                              _gifExportDirectory = selected;
                               _schedulePersistExportSettings();
                               setModalState(() {});
                               if (mounted) setState(() {});
@@ -1770,7 +1773,8 @@ class _EditorScreenState extends State<EditorScreen> {
                             const Divider(height: 24),
                             SwitchListTile(
                               contentPadding: EdgeInsets.zero,
-                              title: const Text(AppStrings.saveToPhotoLibraryDirectly),
+                              title: const Text(
+                                  AppStrings.saveToPhotoLibraryDirectly),
                               value: _saveToPhotoLibrary,
                               onChanged: (value) {
                                 _saveToPhotoLibrary = value;
@@ -1783,10 +1787,7 @@ class _EditorScreenState extends State<EditorScreen> {
                           const Divider(height: 24),
                           SwitchListTile(
                             contentPadding: EdgeInsets.zero,
-                            title: const Text(
-                                AppStrings.enableLiquidGlassUi),
-                            subtitle: const Text(
-                                AppStrings.liquidGlassPerformanceHint),
+                            title: const Text(AppStrings.enableLiquidGlassUi),
                             value: LiquidGlassRefs.isLiquidGlassEnabledByUser,
                             onChanged: (value) {
                               LiquidGlassRefs.setUserLiquidGlassEnabled(value);
@@ -1838,7 +1839,9 @@ class _EditorScreenState extends State<EditorScreen> {
             decoration: InputDecoration(
               labelText: label,
               border: const OutlineInputBorder(),
-              hintText: enabled ? AppStrings.enterExportPath : AppStrings.exportPathNotNeededForPhotoLibrary,
+              hintText: enabled
+                  ? AppStrings.enterExportPath
+                  : AppStrings.exportPathNotNeededForPhotoLibrary,
             ),
           ),
         ),
@@ -1896,7 +1899,9 @@ class _EditorScreenState extends State<EditorScreen> {
                     : () => _exportCurrentFrame(controller),
                 icon: const Icon(Icons.image_rounded),
                 label: Text(
-                  isMobile ? AppStrings.frameExport : AppStrings.exportCurrentFrameImage,
+                  isMobile
+                      ? AppStrings.frameExport
+                      : AppStrings.exportCurrentFrameImage,
                 ),
               ),
             ),
@@ -1917,7 +1922,11 @@ class _EditorScreenState extends State<EditorScreen> {
                     ? null
                     : () => _startExport(controller),
                 icon: const Icon(Icons.movie_creation_rounded),
-                label: const Text(AppStrings.export),
+                label: Text(
+                  controller.exportFormat == ExportFormat.gif
+                      ? AppStrings.exportGif
+                      : AppStrings.exportMp4,
+                ),
               ),
             ),
             const SizedBox(width: LiquidGlassRefs.exportButtonGap),
