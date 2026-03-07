@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
+
+import '../liquid_glass/liquid_glass_refs.dart';
+import 'interactive_liquid_glass_icon_button.dart';
 
 class PlaybackTransportBar extends StatelessWidget {
   const PlaybackTransportBar({
@@ -27,111 +31,174 @@ class PlaybackTransportBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final useLiquidGlass = LiquidGlassRefs.supportsLiquidGlass;
+    final layerSettings = LiquidGlassRefs.isWindowsPlatform
+        ? LiquidGlassRefs.transportLayerSettingsWindows
+        : LiquidGlassRefs.transportLayerSettings;
+
+    final alignedButtonHeight = LiquidGlassRefs.transportPrimaryButtonSize;
+
     final buttons = <Widget>[
-      _buildIconButton(
-        context: context,
-        key: const Key('transport-set-start'),
+      _centerAlignedButton(
+        height: alignedButtonHeight,
+        child: InteractiveLiquidGlassIconButton(
+        buttonKey: const Key('transport-set-start'),
         icon: Icons.first_page_rounded,
         tooltip: '現在位置を開始点に設定',
+        isDisabled: isDisabled,
         onPressed: onSetStart,
+        useLiquidGlass: useLiquidGlass,
+        grouped: useLiquidGlass,
+        backgroundColor: LiquidGlassRefs.transportBoundaryButtonColor,
+        foregroundColor: LiquidGlassRefs.textPrimary,
       ),
-      _buildIconButton(
-        context: context,
-        key: const Key('transport-trim-start'),
+      ),
+      _centerAlignedButton(
+        height: alignedButtonHeight,
+        child: InteractiveLiquidGlassIconButton(
+        buttonKey: const Key('transport-trim-start'),
         icon: Icons.skip_previous_rounded,
         tooltip: '開始点へ移動',
+        isDisabled: isDisabled,
         onPressed: onJumpStart,
+        useLiquidGlass: useLiquidGlass,
+        grouped: useLiquidGlass,
+        backgroundColor: LiquidGlassRefs.transportSecondaryButtonColor,
+        foregroundColor: LiquidGlassRefs.textPrimary,
       ),
-      _buildIconButton(
-        context: context,
-        key: const Key('transport-frame-prev'),
+      ),
+      _centerAlignedButton(
+        height: alignedButtonHeight,
+        child: InteractiveLiquidGlassIconButton(
+        buttonKey: const Key('transport-frame-prev'),
         icon: Icons.fast_rewind_rounded,
         tooltip: '1フレーム戻る',
+        isDisabled: isDisabled,
         onPressed: onStepPrev,
+        useLiquidGlass: useLiquidGlass,
+        grouped: useLiquidGlass,
+        backgroundColor: LiquidGlassRefs.transportSecondaryButtonColor,
+        foregroundColor: LiquidGlassRefs.textPrimary,
       ),
-      Tooltip(
-        message: isPlaying ? '一時停止' : '再生',
-        child: FilledButton.tonal(
-          key: const Key('transport-play-pause'),
-          onPressed: isDisabled ? null : onPlayPause,
-          style: FilledButton.styleFrom(
-            minimumSize: const Size(44, 40),
-            padding: EdgeInsets.zero,
-            visualDensity: VisualDensity.compact,
-          ),
-          child: Icon(
-            isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-            size: 22,
-          ),
-        ),
       ),
-      _buildIconButton(
-        context: context,
-        key: const Key('transport-frame-next'),
+      _centerAlignedButton(
+        height: alignedButtonHeight,
+        child: InteractiveLiquidGlassIconButton(
+        buttonKey: const Key('transport-play-pause'),
+        icon: isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+        tooltip: isPlaying ? '一時停止' : '再生',
+        isDisabled: isDisabled,
+        onPressed: onPlayPause,
+        useLiquidGlass: useLiquidGlass,
+        grouped: useLiquidGlass,
+        isPrimary: true,
+        backgroundColor: LiquidGlassRefs.accentOrange,
+        foregroundColor: Colors.white,
+      ),
+      ),
+      _centerAlignedButton(
+        height: alignedButtonHeight,
+        child: InteractiveLiquidGlassIconButton(
+        buttonKey: const Key('transport-frame-next'),
         icon: Icons.fast_forward_rounded,
         tooltip: '1フレーム進む',
+        isDisabled: isDisabled,
         onPressed: onStepNext,
+        useLiquidGlass: useLiquidGlass,
+        grouped: useLiquidGlass,
+        backgroundColor: LiquidGlassRefs.transportSecondaryButtonColor,
+        foregroundColor: LiquidGlassRefs.textPrimary,
       ),
-      _buildIconButton(
-        context: context,
-        key: const Key('transport-trim-end'),
+      ),
+      _centerAlignedButton(
+        height: alignedButtonHeight,
+        child: InteractiveLiquidGlassIconButton(
+        buttonKey: const Key('transport-trim-end'),
         icon: Icons.skip_next_rounded,
         tooltip: '終了点へ移動',
+        isDisabled: isDisabled,
         onPressed: onJumpEnd,
+        useLiquidGlass: useLiquidGlass,
+        grouped: useLiquidGlass,
+        backgroundColor: LiquidGlassRefs.transportSecondaryButtonColor,
+        foregroundColor: LiquidGlassRefs.textPrimary,
       ),
-      _buildIconButton(
-        context: context,
-        key: const Key('transport-set-end'),
+      ),
+      _centerAlignedButton(
+        height: alignedButtonHeight,
+        child: InteractiveLiquidGlassIconButton(
+        buttonKey: const Key('transport-set-end'),
         icon: Icons.last_page_rounded,
         tooltip: '現在位置を終了点に設定',
+        isDisabled: isDisabled,
         onPressed: onSetEnd,
+        useLiquidGlass: useLiquidGlass,
+        grouped: useLiquidGlass,
+        backgroundColor: LiquidGlassRefs.transportBoundaryButtonColor,
+        foregroundColor: LiquidGlassRefs.textPrimary,
+      ),
       ),
     ];
 
-    return DecoratedBox(
-      key: const Key('preview-transport-overlay'),
-      decoration: BoxDecoration(
-        color: colorScheme.surface.withOpacity(0.88),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final isCompact = constraints.maxWidth < 360;
-            if (!isCompact) {
-              return Row(mainAxisSize: MainAxisSize.min, children: buttons);
-            }
-            return Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 2,
-              runSpacing: 2,
-              children: buttons,
-            );
-          },
+    final buttonsCore = SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: _withSpacing(
+          buttons,
+          spacing: LiquidGlassRefs.transportButtonBlendSpacing,
         ),
+      ),
+    );
+
+    final groupedButtons = Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: LiquidGlassRefs.transportPaddingHorizontal,
+        vertical: LiquidGlassRefs.transportPaddingVertical,
+      ),
+      child: buttonsCore,
+    );
+
+    if (!useLiquidGlass) {
+      return KeyedSubtree(
+        key: const Key('preview-transport-overlay'),
+        child: groupedButtons,
+      );
+    }
+
+    return LiquidGlassLayer(
+      key: const Key('preview-transport-overlay'),
+      settings: layerSettings,
+      child: LiquidGlassBlendGroup(
+        blend: LiquidGlassRefs.transportButtonsBlend,
+        child: groupedButtons,
       ),
     );
   }
 
-  Widget _buildIconButton({
-    required BuildContext context,
-    required Key key,
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback onPressed,
+  Widget _centerAlignedButton({
+    required double height,
+    required Widget child,
   }) {
-    return Tooltip(
-      message: tooltip,
-      child: IconButton(
-        key: key,
-        onPressed: isDisabled ? null : onPressed,
-        icon: Icon(icon, size: 20),
-        visualDensity: VisualDensity.compact,
-        style: IconButton.styleFrom(minimumSize: const Size(40, 40)),
-      ),
+    return SizedBox(
+      height: height,
+      child: Center(child: child),
     );
+  }
+
+  List<Widget> _withSpacing(
+    List<Widget> widgets, {
+    required double spacing,
+  }) {
+    if (widgets.isEmpty) return widgets;
+    final result = <Widget>[];
+    for (var i = 0; i < widgets.length; i++) {
+      if (i > 0) {
+        result.add(SizedBox(width: spacing));
+      }
+      result.add(widgets[i]);
+    }
+    return result;
   }
 }

@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
 import '../../models/timeline_thumbnail.dart';
+import '../liquid_glass/liquid_glass_refs.dart';
 
 class TrimTimeline extends StatefulWidget {
   const TrimTimeline({
@@ -18,6 +21,7 @@ class TrimTimeline extends StatefulWidget {
     required this.thumbnails,
     required this.onTrimChanged,
     required this.onSeek,
+    this.trimEnabled = true,
     this.onScrubStart,
     this.onScrubUpdate,
     this.onScrubEnd,
@@ -34,6 +38,7 @@ class TrimTimeline extends StatefulWidget {
   final List<TimelineThumbnail> thumbnails;
   final void Function(double startSeconds, double endSeconds) onTrimChanged;
   final ValueChanged<double> onSeek;
+  final bool trimEnabled;
   final VoidCallback? onScrubStart;
   final ValueChanged<double>? onScrubUpdate;
   final ValueChanged<double>? onScrubEnd;
@@ -45,7 +50,8 @@ class TrimTimeline extends StatefulWidget {
   State<TrimTimeline> createState() => _TrimTimelineState();
 }
 
-class _TrimTimelineState extends State<TrimTimeline> {
+class _TrimTimelineState extends State<TrimTimeline>
+    with TickerProviderStateMixin {
   final ScrollController _scrollController = ScrollController();
   final Set<int> _activeTouchPointers = <int>{};
 
@@ -59,6 +65,14 @@ class _TrimTimelineState extends State<TrimTimeline> {
   Offset? _lastMiddlePanGlobal;
   bool _isTwoFingerGestureActive = false;
   double _pinchStartZoom = 1.0;
+  bool _isDraggingStartHandle = false;
+  bool _isDraggingEndHandle = false;
+  double? _dragPreviewStartSeconds;
+  double? _dragPreviewEndSeconds;
+  double _dragBaseStartSeconds = 0;
+  double _dragBaseEndSeconds = 0;
+  double _dragAccumulatedPx = 0;
+  double _dragPxPerSecond = 1.0;
 
   bool _isTouchPanCandidate = false;
   bool _isTouchPanning = false;
@@ -70,21 +84,70 @@ class _TrimTimelineState extends State<TrimTimeline> {
   Widget? _cachedThumbnailStrip;
   int _cachedThumbnailSignature = 0;
   double _cachedThumbnailTimelineWidth = -1;
+  late final AnimationController _startHandleInertiaController;
+  late final AnimationController _endHandleInertiaController;
+  double _startHandleInertiaInitialOffsetPx = 0;
+  double _endHandleInertiaInitialOffsetPx = 0;
 
   double get _totalSeconds =>
       math.max(0.1, widget.totalDuration.inMilliseconds / 1000);
 
   @override
+  void initState() {
+    super.initState();
+    _startHandleInertiaController = AnimationController(
+      vsync: this,
+      duration: LiquidGlassRefs.timelineTrimHandleInertiaDuration,
+      value: 1.0,
+    );
+    _endHandleInertiaController = AnimationController(
+      vsync: this,
+      duration: LiquidGlassRefs.timelineTrimHandleInertiaDuration,
+      value: 1.0,
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant TrimTimeline oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.trimEnabled && oldWidget.trimEnabled) {
+      _resetDragInteractionState();
+      _isScrubbingPlayhead = false;
+      _isMiddlePanning = false;
+      _lastMiddlePanGlobal = null;
+      _isTwoFingerGestureActive = false;
+      _activeTouchPointers.clear();
+      _clearTouchPanState();
+      _stopTrimHandleInertia(isStart: true);
+      _stopTrimHandleInertia(isStart: false);
+      return;
+    }
+    if (_isDraggingHandle) {
+      return;
+    }
+
+    final startDelta = widget.trimStartSeconds - oldWidget.trimStartSeconds;
+    if (startDelta.abs() > 0.0001) {
+      _triggerTrimHandleInertia(isStart: true, deltaSeconds: startDelta);
+    }
+
+    final endDelta = widget.trimEndSeconds - oldWidget.trimEndSeconds;
+    if (endDelta.abs() > 0.0001) {
+      _triggerTrimHandleInertia(isStart: false, deltaSeconds: endDelta);
+    }
+  }
+
+  @override
   void dispose() {
     _doubleTapHoldTimer?.cancel();
+    _startHandleInertiaController.dispose();
+    _endHandleInertiaController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return LayoutBuilder(
       builder: (context, constraints) {
         final viewportWidth = constraints.maxWidth;
@@ -114,7 +177,7 @@ class _TrimTimelineState extends State<TrimTimeline> {
             Expanded(
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0E2438),
+                  color: LiquidGlassRefs.timelineSurface,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Listener(
@@ -131,6 +194,9 @@ class _TrimTimelineState extends State<TrimTimeline> {
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTapDown: (details) {
+                          if (!widget.trimEnabled) {
+                            return;
+                          }
                           if (_isMiddlePanning ||
                               _isTwoFingerGestureActive ||
                               _isTouchPanning ||
@@ -145,6 +211,9 @@ class _TrimTimelineState extends State<TrimTimeline> {
                           );
                         },
                         onHorizontalDragStart: (details) {
+                          if (!widget.trimEnabled) {
+                            return;
+                          }
                           if (_isMiddlePanning ||
                               _isTwoFingerGestureActive ||
                               _isTouchPanning ||
@@ -155,9 +224,17 @@ class _TrimTimelineState extends State<TrimTimeline> {
                           }
 
                           final pointerX = details.localPosition.dx;
+                          final visualTrimStartPx = _visualTrimStartPx(
+                            trimStartPx: trimStartPx,
+                            timelineWidth: timelineWidth,
+                          );
+                          final visualTrimEndPx = _visualTrimEndPx(
+                            trimEndPx: trimEndPx,
+                            timelineWidth: timelineWidth,
+                          );
                           final isNearHandle =
-                              (pointerX - trimStartPx).abs() <= 14 ||
-                                  (pointerX - trimEndPx).abs() <= 14;
+                              (pointerX - visualTrimStartPx).abs() <= 14 ||
+                                  (pointerX - visualTrimEndPx).abs() <= 14;
                           if (isNearHandle) {
                             return;
                           }
@@ -228,88 +305,148 @@ class _TrimTimelineState extends State<TrimTimeline> {
                         onScaleEnd: (_) {
                           _isTwoFingerGestureActive = false;
                         },
-                        child: Stack(
-                          key: const Key('trim-timeline-surface'),
-                          children: <Widget>[
-                            _buildThumbnailStrip(timelineWidth),
-                            _buildMarkers(
-                              timelineWidth,
-                              markerStep,
-                              effectivePps,
-                            ),
-                            Positioned(
-                              left: 0,
-                              right: timelineWidth - trimStartPx,
-                              top: 0,
-                              bottom: 0,
-                              child: ColoredBox(
-                                color: Colors.black.withOpacity(0.40),
-                              ),
-                            ),
-                            Positioned(
-                              left: trimEndPx,
-                              right: 0,
-                              top: 0,
-                              bottom: 0,
-                              child: ColoredBox(
-                                color: Colors.black.withOpacity(0.40),
-                              ),
-                            ),
-                            Positioned(
-                              left: playheadPx,
-                              top: 0,
-                              bottom: 0,
-                              child: Container(
-                                width: 2,
-                                color: colorScheme.primary,
-                              ),
-                            ),
-                            _buildTrimHandle(
-                              key: const Key('trim-handle-start'),
-                              x: trimStartPx,
-                              color: colorScheme.tertiary,
-                              onDragStart: () {
-                                _isDraggingHandle = true;
-                              },
-                              onDrag: (deltaPx) {
-                                final nextStart = _pxToSeconds(
-                                  trimStartPx + deltaPx,
+                        child: AnimatedBuilder(
+                          animation: Listenable.merge(<Listenable>[
+                            _startHandleInertiaController,
+                            _endHandleInertiaController,
+                          ]),
+                          builder: (context, _) {
+                            final visualTrimStartPx = _isDraggingStartHandle &&
+                                    _dragPreviewStartSeconds != null
+                                ? _secondsToPx(
+                                    _dragPreviewStartSeconds!,
+                                    effectivePps,
+                                  )
+                                : _visualTrimStartPx(
+                                    trimStartPx: trimStartPx,
+                                    timelineWidth: timelineWidth,
+                                  );
+                            final visualTrimEndPx = _isDraggingEndHandle &&
+                                    _dragPreviewEndSeconds != null
+                                ? _secondsToPx(
+                                    _dragPreviewEndSeconds!,
+                                    effectivePps,
+                                  )
+                                : _visualTrimEndPx(
+                                    trimEndPx: trimEndPx,
+                                    timelineWidth: timelineWidth,
+                                  );
+                            final startPulse = _currentHandlePulse(
+                              _startHandleInertiaController,
+                            );
+                            final endPulse = _currentHandlePulse(
+                              _endHandleInertiaController,
+                            );
+
+                            return Stack(
+                              key: const Key('trim-timeline-surface'),
+                              children: <Widget>[
+                                _buildThumbnailStrip(timelineWidth),
+                                _buildOutsideDimOverlay(
+                                  timelineWidth: timelineWidth,
+                                  trimStartPx: visualTrimStartPx,
+                                  trimEndPx: visualTrimEndPx,
+                                ),
+                                _buildTrimRangeLiquidOverlay(
+                                  timelineWidth: timelineWidth,
+                                  trimStartPx: visualTrimStartPx,
+                                  trimEndPx: visualTrimEndPx,
+                                ),
+                                _buildMarkers(
+                                  timelineWidth,
+                                  markerStep,
                                   effectivePps,
-                                ).clamp(0.0, widget.trimEndSeconds - 0.1);
-                                widget.onTrimChanged(
-                                  nextStart,
-                                  widget.trimEndSeconds,
-                                );
-                              },
-                              onDragEnd: () {
-                                _isDraggingHandle = false;
-                              },
-                            ),
-                            _buildTrimHandle(
-                              key: const Key('trim-handle-end'),
-                              x: trimEndPx,
-                              color: colorScheme.secondary,
-                              onDragStart: () {
-                                _isDraggingHandle = true;
-                              },
-                              onDrag: (deltaPx) {
-                                final nextEnd = _pxToSeconds(
-                                  trimEndPx + deltaPx,
-                                  effectivePps,
-                                ).clamp(
-                                  widget.trimStartSeconds + 0.1,
-                                  _totalSeconds,
-                                );
-                                widget.onTrimChanged(
-                                  widget.trimStartSeconds,
-                                  nextEnd,
-                                );
-                              },
-                              onDragEnd: () {
-                                _isDraggingHandle = false;
-                              },
-                            ),
-                          ],
+                                ),
+                                Positioned(
+                                  left: playheadPx,
+                                  top: 0,
+                                  bottom: 0,
+                                  child: Container(
+                                    width: 2,
+                                    color: LiquidGlassRefs.accentOrange,
+                                  ),
+                                ),
+                                _buildTrimHandle(
+                                  key: const Key('trim-handle-start'),
+                                  x: visualTrimStartPx,
+                                  color: LiquidGlassRefs.accentOrange,
+                                  pulse: startPulse,
+                                  enabled: widget.trimEnabled,
+                                  onDragStart: () {
+                                    _isDraggingHandle = true;
+                                    _isDraggingStartHandle = true;
+                                    _isDraggingEndHandle = false;
+                                    _dragBaseStartSeconds =
+                                        widget.trimStartSeconds;
+                                    _dragBaseEndSeconds = widget.trimEndSeconds;
+                                    _dragAccumulatedPx = 0;
+                                    _dragPxPerSecond = effectivePps;
+                                    _dragPreviewStartSeconds =
+                                        widget.trimStartSeconds;
+                                    _dragPreviewEndSeconds = null;
+                                    _stopTrimHandleInertia(isStart: true);
+                                  },
+                                  onDrag: (deltaPx) {
+                                    _dragAccumulatedPx += deltaPx;
+                                    final nextStart = (_dragBaseStartSeconds +
+                                            (_dragAccumulatedPx /
+                                                _dragPxPerSecond))
+                                        .clamp(0.0, _dragBaseEndSeconds - 0.1);
+                                    _dragPreviewStartSeconds =
+                                        nextStart.toDouble();
+                                    setState(() {});
+                                    widget.onTrimChanged(
+                                      nextStart,
+                                      _dragBaseEndSeconds,
+                                    );
+                                  },
+                                  onDragEnd: () {
+                                    _resetDragInteractionState();
+                                  },
+                                ),
+                                _buildTrimHandle(
+                                  key: const Key('trim-handle-end'),
+                                  x: visualTrimEndPx,
+                                  color: LiquidGlassRefs.accentOrange,
+                                  pulse: endPulse,
+                                  enabled: widget.trimEnabled,
+                                  onDragStart: () {
+                                    _isDraggingHandle = true;
+                                    _isDraggingStartHandle = false;
+                                    _isDraggingEndHandle = true;
+                                    _dragBaseStartSeconds =
+                                        widget.trimStartSeconds;
+                                    _dragBaseEndSeconds = widget.trimEndSeconds;
+                                    _dragAccumulatedPx = 0;
+                                    _dragPxPerSecond = effectivePps;
+                                    _dragPreviewStartSeconds = null;
+                                    _dragPreviewEndSeconds =
+                                        widget.trimEndSeconds;
+                                    _stopTrimHandleInertia(isStart: false);
+                                  },
+                                  onDrag: (deltaPx) {
+                                    _dragAccumulatedPx += deltaPx;
+                                    final nextEnd = (_dragBaseEndSeconds +
+                                            (_dragAccumulatedPx /
+                                                _dragPxPerSecond))
+                                        .clamp(
+                                      _dragBaseStartSeconds + 0.1,
+                                      _totalSeconds,
+                                    );
+                                    _dragPreviewEndSeconds = nextEnd.toDouble();
+                                    setState(() {});
+                                    widget.onTrimChanged(
+                                      _dragBaseStartSeconds,
+                                      nextEnd,
+                                    );
+                                  },
+                                  onDragEnd: () {
+                                    _resetDragInteractionState();
+                                  },
+                                ),
+                              ],
+                            );
+                          },
                         ),
                       ),
                     ),
@@ -470,7 +607,7 @@ class _TrimTimelineState extends State<TrimTimeline> {
             decoration: BoxDecoration(color: Color(0x22162A3C)),
             child: Center(
               child: Text(
-                'サムネイル生成中...',
+                'サムネイル読み込み中...',
                 style: TextStyle(color: Colors.white70),
               ),
             ),
@@ -494,63 +631,175 @@ class _TrimTimelineState extends State<TrimTimeline> {
     final strip = Positioned.fill(
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
-        child: Row(
-          children: widget.thumbnails.map((thumbnail) {
-            return SizedBox(
-              width: tileWidth,
-              child: DecoratedBox(
-                decoration: const BoxDecoration(color: Colors.black12),
-                child: Center(
-                  child: Image.file(
-                    File(thumbnail.path),
-                    key: ValueKey<String>(thumbnail.path),
-                    fit: BoxFit.contain,
-                    filterQuality: FilterQuality.none,
-                    errorBuilder: (context, error, stackTrace) =>
-                        const ColoredBox(color: Color(0xFF24374B)),
-                  ),
+        child: InteractiveViewer(
+          panEnabled: false,
+          scaleEnabled: false,
+          child: Row(
+            children: widget.thumbnails.map((thumbnail) {
+              return SizedBox(
+                width: tileWidth,
+                child: Image.file(
+                  File(thumbnail.path),
+                  fit: BoxFit.cover,
+                  filterQuality: FilterQuality.medium,
+                  errorBuilder: (context, error, stackTrace) {
+                    return const ColoredBox(color: Color(0x22000000));
+                  },
                 ),
-              ),
-            );
-          }).toList(),
+              );
+            }).toList(growable: false),
+          ),
         ),
       ),
     );
+
     _cachedThumbnailStrip = strip;
     _cachedThumbnailSignature = signature;
     _cachedThumbnailTimelineWidth = timelineWidth;
     return strip;
   }
 
-  Widget _buildMarkers(double timelineWidth, double markerStep, double pps) {
-    final markers = <Widget>[];
-    for (double second = 0; second <= _totalSeconds; second += markerStep) {
-      final x = _secondsToPx(second, pps);
-      markers.add(
-        Positioned(
-          left: x,
-          top: 0,
-          bottom: 0,
-          child: Container(
-            width: 1,
-            color: Colors.white.withOpacity(0.22),
-          ),
-        ),
-      );
-      markers.add(
-        Positioned(
-          left: x + 3,
-          bottom: 4,
-          child: Text(
-            '${second.toStringAsFixed(second % 1 == 0 ? 0 : 1)}s',
-            style: const TextStyle(fontSize: 10),
-          ),
-        ),
-      );
+  Widget _buildTrimRangeLiquidOverlay({
+    required double timelineWidth,
+    required double trimStartPx,
+    required double trimEndPx,
+  }) {
+    final horizontalInset =
+        LiquidGlassRefs.timelineSelectionGlassHorizontalInset;
+    final verticalInset = LiquidGlassRefs.timelineSelectionGlassVerticalInset;
+    final left = trimStartPx + horizontalInset;
+    final width = (trimEndPx - trimStartPx - (horizontalInset * 2))
+        .clamp(0.0, timelineWidth)
+        .toDouble();
+
+    if (width <= 0) {
+      return const SizedBox.shrink();
     }
-    return SizedBox(
-      width: timelineWidth,
-      child: Stack(children: markers),
+
+    final shape = const LiquidRoundedSuperellipse(
+      borderRadius: LiquidGlassRefs.timelineSelectionGlassRadius,
+    );
+    final base = DecoratedBox(
+      decoration: BoxDecoration(
+        color: LiquidGlassRefs.timelineSelectionGlassFillColor,
+        borderRadius:
+            BorderRadius.circular(LiquidGlassRefs.timelineSelectionGlassRadius),
+        border: Border.all(
+          color: LiquidGlassRefs.timelineSelectionGlassBorderColor,
+          width: LiquidGlassRefs.timelineSelectionGlassBorderWidth,
+        ),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: LiquidGlassRefs.timelineSelectionGlowColor,
+            blurRadius: LiquidGlassRefs.timelineSelectionGlowRadius,
+            spreadRadius: LiquidGlassRefs.timelineSelectionGlowSpread,
+          ),
+        ],
+      ),
+    );
+
+    Widget overlay;
+    final useLiveLiquid = LiquidGlassRefs.supportsLiquidGlass &&
+        !(LiquidGlassRefs.isWindowsPlatform && _isDraggingHandle);
+    if (useLiveLiquid) {
+      final liquid = LiquidStretch(
+        stretch: LiquidGlassRefs.isWindowsPlatform
+            ? LiquidGlassRefs.timelineSelectionStretchWindows
+            : LiquidGlassRefs.timelineSelectionStretch,
+        interactionScale: LiquidGlassRefs.isWindowsPlatform
+            ? LiquidGlassRefs.timelineSelectionInteractionScaleWindows
+            : LiquidGlassRefs.timelineSelectionInteractionScale,
+        child: LiquidGlass.withOwnLayer(
+          settings: LiquidGlassRefs.isWindowsPlatform
+              ? LiquidGlassRefs.timelineSelectionLayerSettingsWindows
+              : LiquidGlassRefs.timelineSelectionLayerSettings,
+          shape: shape,
+          child: base,
+        ),
+      );
+      overlay = LiquidGlassRefs.isWindowsPlatform
+          ? liquid
+          : GlassGlow(
+              glowColor: LiquidGlassRefs.timelineSelectionGlowColor,
+              glowRadius: 0.95,
+              child: liquid,
+            );
+    } else {
+      overlay = base;
+    }
+
+    return Positioned(
+      left: left,
+      top: verticalInset,
+      width: width,
+      bottom: verticalInset,
+      child: overlay,
+    );
+  }
+
+  Widget _buildOutsideDimOverlay({
+    required double timelineWidth,
+    required double trimStartPx,
+    required double trimEndPx,
+  }) {
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: CustomPaint(
+          painter: _OutsideSelectionDimPainter(
+            timelineWidth: timelineWidth,
+            trimStartPx: trimStartPx,
+            trimEndPx: trimEndPx,
+            horizontalInset:
+                LiquidGlassRefs.timelineSelectionGlassHorizontalInset,
+            verticalInset: LiquidGlassRefs.timelineSelectionGlassVerticalInset,
+            radius: LiquidGlassRefs.timelineSelectionGlassRadius,
+            color: LiquidGlassRefs.timelineSelectionOutsideDimColor,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMarkers(
+    double timelineWidth,
+    double markerStep,
+    double pxPerSecond,
+  ) {
+    final markerCount = (_totalSeconds / markerStep).ceil() + 1;
+    final labelStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: Colors.white70,
+          fontSize: 10,
+        );
+
+    return IgnorePointer(
+      child: SizedBox(
+        width: timelineWidth,
+        child: Stack(
+          children: List<Widget>.generate(markerCount, (index) {
+            final seconds = (index * markerStep).clamp(0, _totalSeconds);
+            final x = _secondsToPx(seconds.toDouble(), pxPerSecond);
+            return Positioned(
+              left: x,
+              top: 0,
+              bottom: 0,
+              child: Column(
+                children: <Widget>[
+                  Container(
+                    width: 1,
+                    height: 14,
+                    color: Colors.white24,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _formatSeconds(seconds.toDouble()),
+                    style: labelStyle,
+                  ),
+                ],
+              ),
+            );
+          }),
+        ),
+      ),
     );
   }
 
@@ -558,38 +807,36 @@ class _TrimTimelineState extends State<TrimTimeline> {
     required Key key,
     required double x,
     required Color color,
-    VoidCallback? onDragStart,
+    required double pulse,
+    required bool enabled,
+    required VoidCallback onDragStart,
     required ValueChanged<double> onDrag,
-    VoidCallback? onDragEnd,
+    required VoidCallback onDragEnd,
   }) {
     return Positioned(
-      left: x - 8,
+      left: x - 7,
       top: 0,
       bottom: 0,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.resizeLeftRight,
+      child: Transform.scale(
+        scaleX: 1 + pulse.abs() * 0.65,
+        scaleY: 1 - pulse.abs() * 0.25,
         child: GestureDetector(
           key: key,
           behavior: HitTestBehavior.translucent,
-          onHorizontalDragStart: (_) => onDragStart?.call(),
-          onHorizontalDragUpdate: (details) => onDrag(details.delta.dx),
-          onHorizontalDragCancel: () => onDragEnd?.call(),
-          onHorizontalDragEnd: (_) => onDragEnd?.call(),
+          onHorizontalDragStart: enabled ? (_) => onDragStart() : null,
+          onHorizontalDragUpdate:
+              enabled ? (details) => onDrag(details.delta.dx) : null,
+          onHorizontalDragEnd: enabled ? (_) => onDragEnd() : null,
+          onHorizontalDragCancel: enabled ? onDragEnd : null,
           child: SizedBox(
-            width: 16,
+            width: 14,
             child: Center(
               child: Container(
                 width: 4,
-                height: 86,
+                height: 44,
                 decoration: BoxDecoration(
                   color: color,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: <BoxShadow>[
-                    BoxShadow(
-                      color: color.withOpacity(0.32),
-                      blurRadius: 12,
-                    ),
-                  ],
+                  borderRadius: BorderRadius.circular(999),
                 ),
               ),
             ),
@@ -599,16 +846,186 @@ class _TrimTimelineState extends State<TrimTimeline> {
     );
   }
 
-  double _secondsToPx(double seconds, double pps) => seconds * pps;
+  void _triggerTrimHandleInertia({
+    required bool isStart,
+    required double deltaSeconds,
+  }) {
+    if (deltaSeconds.abs() < 0.0001) {
+      return;
+    }
 
-  double _pxToSeconds(double px, double pps) =>
-      (px / pps).clamp(0.0, _totalSeconds);
+    final pxPerSecond = _estimatedPxPerSecond();
+    final deltaPx = deltaSeconds * pxPerSecond;
+    final amplitudePx = deltaPx.abs().clamp(
+          LiquidGlassRefs.timelineTrimHandleInertiaMinOffsetPx,
+          LiquidGlassRefs.timelineTrimHandleInertiaMaxOffsetPx,
+        );
+    final signedOffsetPx =
+        deltaPx.isNegative ? -amplitudePx.toDouble() : amplitudePx.toDouble();
 
-  double _resolveMarkerStep(double pps) {
-    if (pps >= 260) return 0.25;
-    if (pps >= 170) return 0.5;
-    if (pps >= 90) return 1;
-    if (pps >= 50) return 2;
-    return 5;
+    if (isStart) {
+      _startHandleInertiaInitialOffsetPx = signedOffsetPx;
+      _startHandleInertiaController.forward(from: 0);
+      return;
+    }
+
+    _endHandleInertiaInitialOffsetPx = signedOffsetPx;
+    _endHandleInertiaController.forward(from: 0);
+  }
+
+  void _stopTrimHandleInertia({required bool isStart}) {
+    if (isStart) {
+      _startHandleInertiaController.stop();
+      _startHandleInertiaController.value = 1.0;
+      _startHandleInertiaInitialOffsetPx = 0;
+      return;
+    }
+    _endHandleInertiaController.stop();
+    _endHandleInertiaController.value = 1.0;
+    _endHandleInertiaInitialOffsetPx = 0;
+  }
+
+  double _currentHandleInertiaOffset(
+    AnimationController controller,
+    double initialOffsetPx,
+  ) {
+    final t = Curves.elasticOut.transform(controller.value);
+    return initialOffsetPx * (1 - t);
+  }
+
+  double _currentHandlePulse(AnimationController controller) {
+    return math.sin(controller.value * math.pi) *
+        LiquidGlassRefs.timelineTrimHandlePulseMax;
+  }
+
+  double _visualTrimStartPx({
+    required double trimStartPx,
+    required double timelineWidth,
+  }) {
+    final offsetPx = _currentHandleInertiaOffset(
+      _startHandleInertiaController,
+      _startHandleInertiaInitialOffsetPx,
+    );
+    return (trimStartPx + offsetPx).clamp(0.0, timelineWidth).toDouble();
+  }
+
+  double _visualTrimEndPx({
+    required double trimEndPx,
+    required double timelineWidth,
+  }) {
+    final offsetPx = _currentHandleInertiaOffset(
+      _endHandleInertiaController,
+      _endHandleInertiaInitialOffsetPx,
+    );
+    return (trimEndPx + offsetPx).clamp(0.0, timelineWidth).toDouble();
+  }
+
+  double _estimatedPxPerSecond() {
+    final viewportWidth = _lastViewportWidth > 0 ? _lastViewportWidth : 360;
+    final fitPps = viewportWidth / _totalSeconds;
+    return fitPps * widget.zoomLevel;
+  }
+
+  void _resetDragInteractionState() {
+    _isDraggingHandle = false;
+    _isDraggingStartHandle = false;
+    _isDraggingEndHandle = false;
+    _dragPreviewStartSeconds = null;
+    _dragPreviewEndSeconds = null;
+    _dragAccumulatedPx = 0;
+    _dragPxPerSecond = 1.0;
+  }
+
+  double _secondsToPx(double seconds, double pxPerSecond) {
+    return seconds.clamp(0.0, _totalSeconds) * pxPerSecond;
+  }
+
+  double _pxToSeconds(double px, double pxPerSecond) {
+    if (pxPerSecond <= 0) return 0;
+    return (px / pxPerSecond).clamp(0.0, _totalSeconds).toDouble();
+  }
+
+  double _resolveMarkerStep(double pxPerSecond) {
+    const candidates = <double>[0.5, 1, 2, 5, 10, 15, 30, 60];
+    for (final candidate in candidates) {
+      if (candidate * pxPerSecond >= 56) {
+        return candidate;
+      }
+    }
+    return 60;
+  }
+
+  String _formatSeconds(double seconds) {
+    final total = seconds.round();
+    final minutes = total ~/ 60;
+    final remain = total % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${remain.toString().padLeft(2, '0')}';
+  }
+}
+
+class _OutsideSelectionDimPainter extends CustomPainter {
+  _OutsideSelectionDimPainter({
+    required this.timelineWidth,
+    required this.trimStartPx,
+    required this.trimEndPx,
+    required this.horizontalInset,
+    required this.verticalInset,
+    required this.radius,
+    required this.color,
+  });
+
+  final double timelineWidth;
+  final double trimStartPx;
+  final double trimEndPx;
+  final double horizontalInset;
+  final double verticalInset;
+  final double radius;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final fullRect = Offset.zero & size;
+    final fullPath = Path()..addRect(fullRect);
+    final paint = Paint()..color = color;
+
+    final left = (trimStartPx + horizontalInset).clamp(0.0, timelineWidth);
+    final width = (trimEndPx - trimStartPx - (horizontalInset * 2))
+        .clamp(0.0, timelineWidth)
+        .toDouble();
+    final innerHeight =
+        (size.height - (verticalInset * 2)).clamp(0.0, size.height).toDouble();
+
+    if (width <= 0 || innerHeight <= 0) {
+      canvas.drawPath(fullPath, paint);
+      return;
+    }
+
+    final holeRect = Rect.fromLTWH(
+      left.toDouble(),
+      verticalInset,
+      width,
+      innerHeight,
+    );
+    final holePath = Path()
+      ..addRRect(
+        RRect.fromRectAndRadius(holeRect, Radius.circular(radius)),
+      );
+    final outsidePath = Path.combine(
+      ui.PathOperation.difference,
+      fullPath,
+      holePath,
+    );
+    canvas.drawPath(outsidePath, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _OutsideSelectionDimPainter oldDelegate) {
+    return oldDelegate.timelineWidth != timelineWidth ||
+        oldDelegate.trimStartPx != trimStartPx ||
+        oldDelegate.trimEndPx != trimEndPx ||
+        oldDelegate.horizontalInset != horizontalInset ||
+        oldDelegate.verticalInset != verticalInset ||
+        oldDelegate.radius != radius ||
+        oldDelegate.color != color;
   }
 }

@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gintoolflutter/src/ui/widgets/preview_stage.dart';
 
 void main() {
-  testWidgets('左下再生FABが存在せず、bottomOverlayが表示される', (tester) async {
+  testWidgets('bottomOverlay が表示され、余計な再生FABは表示されない', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -24,6 +24,6 @@ void main() {
 
     expect(find.byKey(const Key('overlay-test-key')), findsOneWidget);
     expect(find.byKey(const Key('preview_play_pause')), findsNothing);
-    expect(find.text('ピンポン: 順方向'), findsOneWidget);
+    expect(find.text('00:01 (start 0.00s / end 5.00s)'), findsOneWidget);
   });
 }

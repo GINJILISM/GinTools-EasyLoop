@@ -1,0 +1,201 @@
+{
+  "version": "2.8",
+  "children": [
+    {
+      "type": "frame",
+      "id": "HGqER",
+      "x": 0,
+      "y": 0,
+      "name": "ImportScreen",
+      "clip": true,
+      "width": 1440,
+      "height": 900,
+      "fill": "#2c2c2cff",
+      "layout": "none",
+      "children": [
+        {
+          "type": "rectangle",
+          "id": "NUibV",
+          "x": 0,
+          "y": 0,
+          "name": "Top Tint",
+          "fill": "#303030ff",
+          "width": 1440,
+          "height": 900
+        },
+        {
+          "type": "frame",
+          "id": "PvJPx",
+          "x": 290,
+          "y": 280,
+          "name": "Import Panel",
+          "width": 860,
+          "fill": "#a1a1a1ff",
+          "cornerRadius": 20,
+          "stroke": {
+            "align": "inside",
+            "thickness": 1,
+            "fill": "#cfcfcf33"
+          },
+          "layout": "vertical",
+          "gap": 14,
+          "padding": [
+            32,
+            28
+          ],
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "MRcjO",
+              "name": "Title",
+              "fill": "#EAF7FF",
+              "content": "Select a video to start editing",
+              "textAlign": "center",
+              "fontFamily": "Inter",
+              "fontSize": 42,
+              "fontWeight": "600"
+            },
+            {
+              "type": "text",
+              "id": "TtG4l",
+              "name": "Description",
+              "fill": "#acc0d1ff",
+              "content": "Drop a file here, open from Files, or pick from Photo Library.",
+              "textAlign": "center",
+              "fontFamily": "Inter",
+              "fontSize": 20,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "cD4tv",
+              "name": "Actions",
+              "gap": 12,
+              "justifyContent": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "i9uoe",
+                  "name": "Open From Files",
+                  "fill": "#f56b3dff",
+                  "cornerRadius": 20,
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    18
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "2cIPf",
+                      "name": "Open From Files Label",
+                      "fill": "#FFFFFF",
+                      "content": "Open From Files",
+                      "fontFamily": "Inter",
+                      "fontSize": 16,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Raf6e",
+                  "name": "Open From Library",
+                  "fill": "#cc866eff",
+                  "cornerRadius": 20,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "#cfe9ff66"
+                  },
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    18
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "8C7Rh",
+                      "name": "Open From Library Label",
+                      "fill": "#EAF7FF",
+                      "content": "Open From Library",
+                      "fontFamily": "Inter",
+                      "fontSize": 16,
+                      "fontWeight": "500"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "zEduM",
+              "name": "Drag Hint",
+              "fill": "#acc0d1ff",
+              "content": "Desktop: Drag and drop is supported.",
+              "textAlign": "center",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "BD3su",
+          "x": 1008,
+          "y": 26,
+          "name": "Implementation Notes (Liquid Glass Mapping)",
+          "width": 404,
+          "fill": "#11283ACC",
+          "cornerRadius": 8,
+          "stroke": {
+            "align": "inside",
+            "thickness": 1,
+            "fill": "#35566E"
+          },
+          "layout": "vertical",
+          "gap": 4,
+          "padding": [
+            8,
+            10
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "tYFeh",
+              "name": "inTitle",
+              "fill": "#EAF7FF",
+              "content": "Implementation Notes",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "PrjvX",
+              "name": "in1",
+              "fill": "#acc0d1ff",
+              "content": "- Map panel and CTA buttons to Liquid Glass in Flutter implementation.",
+              "fontFamily": "Inter",
+              "fontSize": 11,
+              "fontWeight": "500"
+            },
+            {
+              "type": "text",
+              "id": "AYlUQ",
+              "name": "in2",
+              "fill": "#acc0d1ff",
+              "content": "- Current .pen is fallback visual styling based on shared Editor color tokens.",
+              "fontFamily": "Inter",
+              "fontSize": 11,
+              "fontWeight": "500"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

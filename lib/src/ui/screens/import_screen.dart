@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/file_import_service.dart';
+import '../liquid_glass/liquid_glass_refs.dart';
 
 class ImportScreen extends StatefulWidget {
   const ImportScreen({super.key, required this.onVideoSelected});
@@ -74,38 +75,38 @@ class _ImportScreenState extends State<ImportScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     final panel = Container(
       width: 860,
       padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         color: _dragging
-            ? colorScheme.primaryContainer.withOpacity(0.70)
-            : colorScheme.surface.withOpacity(0.88),
+            ? LiquidGlassRefs.surfaceCard.withValues(alpha: 0.9)
+            : LiquidGlassRefs.surfaceCard,
         border: Border.all(
-          color: _dragging ? colorScheme.primary : colorScheme.outlineVariant,
-          width: 2,
+          color: _dragging
+              ? LiquidGlassRefs.accentBlue
+              : LiquidGlassRefs.outlineSoft,
+          width: _dragging ? 2 : 1,
         ),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(
-            Icons.video_library_rounded,
-            size: 84,
-            color: colorScheme.primary,
-          ),
-          const SizedBox(height: 14),
           Text(
-            '動画をここへドロップ',
-            style: Theme.of(context).textTheme.headlineSmall,
+            '編集する動画を選択',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: LiquidGlassRefs.textPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
-          const Text(
-            '「ファイルを開く」はファイルアプリから、\n「ライブラリを開く」は写真ライブラリ内の動画を選択します。',
+          Text(
+            'ここにドロップするか、ファイル/ライブラリから開いてください。',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: LiquidGlassRefs.textSecondary,
+                ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 18),
@@ -114,23 +115,37 @@ class _ImportScreenState extends State<ImportScreen> {
             runSpacing: 10,
             alignment: WrapAlignment.center,
             children: <Widget>[
-              FilledButton.icon(
+              FilledButton(
                 onPressed: _isPicking ? null : _pickFile,
-                icon: const Icon(Icons.upload_file_rounded),
-                label: const Text('ファイルを開く'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: LiquidGlassRefs.accentOrange,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('ファイルから開く'),
               ),
-              OutlinedButton.icon(
+              FilledButton(
                 onPressed: _isPicking ? null : _openLibrary,
-                icon: const Icon(Icons.photo_library_outlined),
-                label: const Text('ライブラリを開く'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: LiquidGlassRefs.accentOrangeMuted,
+                  foregroundColor: LiquidGlassRefs.textPrimary,
+                ),
+                child: const Text('ライブラリから開く'),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Desktop: ドラッグ&ドロップ対応',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: LiquidGlassRefs.textSecondary,
+                ),
+            textAlign: TextAlign.center,
           ),
           if (_errorMessage != null) ...<Widget>[
             const SizedBox(height: 12),
             Text(
               _errorMessage!,
-              style: TextStyle(color: colorScheme.error),
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
               textAlign: TextAlign.center,
             ),
           ],
@@ -152,17 +167,9 @@ class _ImportScreenState extends State<ImportScreen> {
         : panel;
 
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: <Color>[Color(0xFF19466A), Color(0xFF0E253A)],
-          ),
-        ),
-        child: Center(
-          child: Padding(padding: const EdgeInsets.all(24), child: content),
-        ),
+      backgroundColor: LiquidGlassRefs.editorBgBase,
+      body: Center(
+        child: Padding(padding: const EdgeInsets.all(24), child: content),
       ),
     );
   }
