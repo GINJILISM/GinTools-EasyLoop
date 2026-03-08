@@ -75,6 +75,8 @@ class _EditorScreenState extends State<EditorScreen> {
   static const String _prefSaveToPhotoLibrary = 'save_to_photo_library';
   static const String _prefOutputNameTemplate = 'output_name_template';
   static const String _prefEnableLiquidGlass = 'enable_liquid_glass_ui';
+  static const String _prefLoopMode = 'loop_mode';
+  static const String _prefAutoLoopEnabled = 'auto_loop_enabled';
 
   late final Player _player;
   late final VideoController _videoController;
@@ -385,6 +387,21 @@ class _EditorScreenState extends State<EditorScreen> {
       _editorController.setGifFpsPreset(fps);
     }
 
+    final loopModeName = prefs.getString(_prefLoopMode);
+    LoopMode? loopMode;
+    for (final item in LoopMode.values) {
+      if (item.name == loopModeName) {
+        loopMode = item;
+        break;
+      }
+    }
+    if (loopMode != null) {
+      _editorController.setLoopMode(loopMode);
+    }
+    _editorController.setAutoLoopEnabled(
+      prefs.getBool(_prefAutoLoopEnabled) ?? _editorController.isAutoLoopEnabled,
+    );
+
     _imageExportDirectory = _normalizeDirectory(
       prefs.getString(_prefImageExportDir),
     );
@@ -424,6 +441,11 @@ class _EditorScreenState extends State<EditorScreen> {
     await prefs.setString(
       _prefOutputNameTemplate,
       _normalizeOutputNameTemplate(_outputNameTemplate),
+    );
+    await prefs.setString(_prefLoopMode, _editorController.loopMode.name);
+    await prefs.setBool(
+      _prefAutoLoopEnabled,
+      _editorController.isAutoLoopEnabled,
     );
     await prefs.setBool(_prefSaveToPhotoLibrary, _saveToPhotoLibrary);
     await prefs.setBool(
@@ -975,7 +997,7 @@ class _EditorScreenState extends State<EditorScreen> {
       if (isMobilePhotoLibrary && exportedPath != null) {
         final saved = await _storeExportToGallery(
           exportedPath,
-          controller.exportFormat.label,
+          controller.exportFormat,
         );
         _lastVideoExportToPhotoLibrary = saved;
         if (mounted) setState(() {});
@@ -983,13 +1005,11 @@ class _EditorScreenState extends State<EditorScreen> {
         _lastVideoExportToPhotoLibrary = false;
         if (mounted) setState(() {});
         messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              AppStrings.exportDoneSnackbarForFormat(
-                controller.exportFormat.label,
-              ),
-            ),
-            behavior: _snackBarBehavior,
+          _buildAccentSnackBar(
+            _savedMessageForFormat(controller.exportFormat),
+            onOpenDestination: () {
+              unawaited(_openLastOutputDestination(controller));
+            },
           ),
         );
       }
@@ -1049,9 +1069,12 @@ class _EditorScreenState extends State<EditorScreen> {
     if (mounted) setState(() {});
 
     messenger.showSnackBar(
-      SnackBar(
-        content: Text(AppStrings.frameExportDone(framePath)),
-        behavior: _snackBarBehavior,
+      _buildAccentSnackBar(
+        AppStrings.captureSaved,
+        onOpenDestination: () {
+          unawaited(_openLastFrameDestination(controller));
+        },
+        destinationIcon: Icons.image_search_rounded,
       ),
     );
   }
@@ -1089,10 +1112,7 @@ class _EditorScreenState extends State<EditorScreen> {
     }
   }
 
-  Future<bool> _storeExportToGallery(
-    String filePath,
-    String formatLabel,
-  ) async {
+  Future<bool> _storeExportToGallery(String filePath, ExportFormat format) async {
     if (!mounted) return false;
 
     final messenger = ScaffoldMessenger.of(context);
@@ -1110,7 +1130,7 @@ class _EditorScreenState extends State<EditorScreen> {
       }
       messenger.showSnackBar(
         _buildPhotoLibrarySavedSnackBar(
-          AppStrings.savedToPhotoLibrary(formatLabel),
+          _savedMessageForFormat(format),
         ),
       );
       return true;
@@ -1126,21 +1146,57 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   SnackBar _buildPhotoLibrarySavedSnackBar(String message) {
+    return _buildAccentSnackBar(
+      message,
+      onOpenDestination: () {
+        unawaited(_openPhotoLibrary());
+      },
+    );
+  }
+
+  SnackBar _buildAccentSnackBar(
+    String message, {
+    VoidCallback? onOpenDestination,
+    IconData destinationIcon = Icons.folder_open_rounded,
+  }) {
+    final textStyle = AppFontRoles.actionButtonLabel(
+          Theme.of(context).textTheme.titleMedium,
+        )?.copyWith(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+        ) ??
+        const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+        );
     return SnackBar(
       behavior: _snackBarBehavior,
+      backgroundColor: LiquidGlassRefs.accentBlue.withValues(alpha: 0.92),
       content: Row(
         children: <Widget>[
-          Expanded(child: Text(message)),
-          IconButton(
-            tooltip: AppStrings.openOutputDestination,
-            onPressed: () {
-              unawaited(_openPhotoLibrary());
-            },
-            icon: const Icon(Icons.folder_open_rounded),
+          Expanded(
+            child: Text(
+              message,
+              style: textStyle,
+            ),
           ),
+          if (onOpenDestination != null)
+            IconButton(
+              tooltip: AppStrings.openOutputDestination,
+              onPressed: onOpenDestination,
+              color: Colors.white,
+              icon: Icon(destinationIcon),
+            ),
         ],
       ),
     );
+  }
+
+  String _savedMessageForFormat(ExportFormat format) {
+    if (format == ExportFormat.gif) {
+      return AppStrings.gifSaved;
+    }
+    return AppStrings.movieSaved;
   }
 
   Future<void> _openLastOutputDestination(EditorController controller) async {
@@ -1859,6 +1915,92 @@ class _EditorScreenState extends State<EditorScreen> {
         controller.isFrameExporting ||
         controller.totalDuration <= Duration.zero;
     final isMobile = _isMobilePlatform;
+    final compactButtonStyle = isMobile
+        ? const ButtonStyle(
+            visualDensity: VisualDensity.compact,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          )
+        : null;
+    final openDestinationButtonStyle = TextButton.styleFrom(
+      foregroundColor: LiquidGlassRefs.accentBlue,
+      visualDensity: VisualDensity.compact,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      minimumSize: const Size(0, 30),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    );
+
+    Widget buildOpenDestinationButton({
+      required VoidCallback onPressed,
+      IconData icon = Icons.folder_open_rounded,
+    }) {
+      return TextButton(
+        style: openDestinationButtonStyle,
+        onPressed: onPressed,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            const Text(AppStrings.openOutputDestination),
+            const SizedBox(width: 6),
+            Icon(icon, size: 18),
+          ],
+        ),
+      );
+    }
+
+    Widget buildFrameExportButton({bool iconOnly = false}) {
+      return LiquidGlassActionButton.icon(
+        fillColor: const Color.fromRGBO(236, 154, 119, 0.94),
+        foregroundColor: Colors.white,
+        borderColor: const Color.fromRGBO(255, 244, 236, 0.36),
+        style: compactButtonStyle,
+        onPressed:
+            exportActionDisabled ? null : () => _exportCurrentFrame(controller),
+        icon: const Icon(Icons.photo_camera_rounded),
+        showLabel: !iconOnly,
+        label: Text(
+          isMobile ? AppStrings.frameExport : AppStrings.exportCurrentFrameImage,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      );
+    }
+
+    Widget buildMovieExportButton({bool shrinkText = false}) {
+      return LiquidGlassActionButton.icon(
+        primary: true,
+        fillColor: LiquidGlassRefs.accentOrange,
+        foregroundColor: Colors.white,
+        borderColor: const Color(0x66CFE9FF),
+        style: compactButtonStyle,
+        onPressed: exportActionDisabled ? null : () => _startExport(controller),
+        icon: Icon(
+          controller.exportFormat == ExportFormat.gif
+              ? Icons.image_rounded
+              : Icons.movie_creation_rounded,
+        ),
+        label: Text(
+          controller.exportFormat == ExportFormat.gif
+              ? AppStrings.exportGif
+              : AppStrings.exportMp4,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: shrinkText ? const TextStyle(fontSize: 12.5) : null,
+        ),
+      );
+    }
+
+    Widget buildSettingsButton() {
+      return InteractiveLiquidGlassIconButton(
+        buttonKey: const Key('export-settings-button'),
+        icon: Icons.settings,
+        tooltip: AppStrings.exportSettingsTooltip,
+        isDisabled: exportActionDisabled,
+        onPressed: () => _showExportSettingsModal(controller),
+        useLiquidGlass: LiquidGlassRefs.supportsLiquidGlass,
+        backgroundColor: Colors.white.withValues(alpha: 0.15),
+        foregroundColor: LiquidGlassRefs.textSecondary,
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1875,115 +2017,94 @@ class _EditorScreenState extends State<EditorScreen> {
               loopMode: controller.loopMode,
               isAutoLoopEnabled: controller.isAutoLoopEnabled,
               enabled: !exportActionDisabled,
-              onLoopModeChanged: controller.setLoopMode,
-              onAutoLoopChanged: controller.setAutoLoopEnabled,
+              onLoopModeChanged: (mode) {
+                controller.setLoopMode(mode);
+                _schedulePersistExportSettings();
+              },
+              onAutoLoopChanged: (enabled) {
+                controller.setAutoLoopEnabled(enabled);
+                _schedulePersistExportSettings();
+              },
             ),
           ],
         ),
         const SizedBox(height: 8),
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: LiquidGlassActionButton.icon(
-                fillColor: const Color.fromRGBO(236, 154, 119, 0.94),
-                foregroundColor: Colors.white,
-                borderColor: const Color.fromRGBO(255, 244, 236, 0.36),
-                style: isMobile
-                    ? const ButtonStyle(
-                        visualDensity: VisualDensity.compact,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      )
-                    : null,
-                onPressed: exportActionDisabled
-                    ? null
-                    : () => _exportCurrentFrame(controller),
-                icon: const Icon(Icons.photo_camera_rounded),
-                label: Text(
-                  isMobile
-                      ? AppStrings.frameExport
-                      : AppStrings.exportCurrentFrameImage,
-                ),
-              ),
-            ),
-            const SizedBox(width: LiquidGlassRefs.exportButtonGap),
-            Expanded(
-              child: LiquidGlassActionButton.icon(
-                primary: true,
-                fillColor: LiquidGlassRefs.accentOrange,
-                foregroundColor: Colors.white,
-                borderColor: const Color(0x66CFE9FF),
-                style: isMobile
-                    ? const ButtonStyle(
-                        visualDensity: VisualDensity.compact,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      )
-                    : null,
-                onPressed: exportActionDisabled
-                    ? null
-                    : () => _startExport(controller),
-                icon: Icon(
-                  controller.exportFormat == ExportFormat.gif
-                      ? Icons.image_rounded
-                      : Icons.movie_creation_rounded,
-                ),
-                label: Text(
-                  controller.exportFormat == ExportFormat.gif
-                      ? AppStrings.exportGif
-                      : AppStrings.exportMp4,
-                ),
-              ),
-            ),
-            const SizedBox(width: LiquidGlassRefs.exportButtonGap),
-            InteractiveLiquidGlassIconButton(
-              buttonKey: const Key('export-settings-button'),
-              icon: Icons.settings,
-              tooltip: AppStrings.exportSettingsTooltip,
-              isDisabled: exportActionDisabled,
-              onPressed: () => _showExportSettingsModal(controller),
-              useLiquidGlass: LiquidGlassRefs.supportsLiquidGlass,
-              backgroundColor: Colors.white.withValues(alpha: 0.15),
-              foregroundColor: LiquidGlassRefs.textSecondary,
-            ),
-          ],
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final isNarrowMobile = isMobile && constraints.maxWidth < 380;
+            final isVeryNarrowMobile = isMobile && constraints.maxWidth < 350;
+            if (isNarrowMobile) {
+              return Row(
+                children: <Widget>[
+                  SizedBox(
+                    width: 72,
+                    child: buildFrameExportButton(iconOnly: true),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: buildMovieExportButton(
+                      shrinkText: isVeryNarrowMobile,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  buildSettingsButton(),
+                ],
+              );
+            }
+
+            return Row(
+              children: <Widget>[
+                Expanded(child: buildFrameExportButton()),
+                const SizedBox(width: LiquidGlassRefs.exportButtonGap),
+                Expanded(child: buildMovieExportButton()),
+                const SizedBox(width: LiquidGlassRefs.exportButtonGap),
+                buildSettingsButton(),
+              ],
+            );
+          },
         ),
         if (controller.isExporting ||
             controller.isFrameExporting ||
             controller.exportProgress > 0) ...<Widget>[
-          const SizedBox(height: 8),
-          LinearProgressIndicator(
-            value: controller.isExporting && controller.exportProgress == 0
-                ? null
-                : controller.exportProgress,
+          const SizedBox(height: 4),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: LinearProgressIndicator(
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    LiquidGlassRefs.accentBlue,
+                  ),
+                  backgroundColor:
+                      LiquidGlassRefs.accentBlue.withValues(alpha: 0.2),
+                  value: controller.isFrameExporting
+                      ? null
+                      : (controller.isExporting &&
+                              controller.exportProgress == 0
+                          ? null
+                          : controller.exportProgress),
+                ),
+              ),
+              if (controller.lastOutputPath != null) ...<Widget>[
+                const SizedBox(width: 8),
+                buildOpenDestinationButton(
+                  onPressed: () {
+                    unawaited(_openLastOutputDestination(controller));
+                  },
+                ),
+              ],
+            ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            controller.isFrameExporting
-                ? AppStrings.frameImageExporting
-                : '${(controller.exportProgress * 100).toStringAsFixed(0)}% ${controller.exportMessage}',
-          ),
-        ],
-        if (controller.lastOutputPath != null) ...<Widget>[
-          const SizedBox(height: 8),
-          Text(
-            _lastVideoExportToPhotoLibrary
-                ? AppStrings.outputToPhotoLibrary
-                : AppStrings.outputToPath(controller.lastOutputPath!),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: OutlinedButton.icon(
-              onPressed: () {
-                unawaited(_openLastOutputDestination(controller));
-              },
-              icon: const Icon(Icons.folder_open_rounded),
-              label: const Text(AppStrings.openOutputDestination),
+          if (controller.isExporting || controller.isFrameExporting) ...<Widget>[
+            const SizedBox(height: 30),
+            Text(
+              controller.isFrameExporting
+                  ? AppStrings.frameImageExporting
+                  : '${(controller.exportProgress * 100).toStringAsFixed(0)}% ${controller.exportMessage}',
             ),
-          ),
+          ],
         ],
         if (controller.lastFrameOutputPath != null) ...<Widget>[
-          const SizedBox(height: 8),
+          const SizedBox(height: 30),
           Text(
             _lastFrameExportToPhotoLibrary
                 ? AppStrings.frameOutputToPhotoLibrary
@@ -1992,13 +2113,12 @@ class _EditorScreenState extends State<EditorScreen> {
             overflow: TextOverflow.ellipsis,
           ),
           Align(
-            alignment: Alignment.centerLeft,
-            child: OutlinedButton.icon(
+            alignment: Alignment.centerRight,
+            child: buildOpenDestinationButton(
+              icon: Icons.image_search_rounded,
               onPressed: () {
                 unawaited(_openLastFrameDestination(controller));
               },
-              icon: const Icon(Icons.image_search_rounded),
-              label: const Text(AppStrings.openOutputDestination),
             ),
           ),
         ],

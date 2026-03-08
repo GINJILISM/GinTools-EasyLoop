@@ -76,10 +76,11 @@ class AppStrings {
   static const exportDoneSnackbar = '書き出しが完了した！';
   static String exportDoneSnackbarForFormat(String formatLabel) =>
       '$formatLabelの書き出しが完了した！';
-  static String frameExportDone(String framePath) =>
-      'フレームキャプチャを書き出した: $framePath';
+  static const captureSaved = 'キャプチャをエクスポート！';
+  static const movieSaved = 'ムービーをエクスポート！';
+  static const gifSaved = 'ジフをエクスポート！';
   static const saveFailed = '保存に失敗した..';
-  static const frameSavedToPhotoLibrary = 'フレームキャプチャーをフォトライブラリに保存した！';
+  static const frameSavedToPhotoLibrary = captureSaved;
   static String failedToSavePhotoLibrary(Object error) =>
       'フォトライブラリ保存に失敗した...: $error';
   static const openOutputDestination = '保存先を開く';
@@ -115,8 +116,8 @@ class AppStrings {
   static const enterExportPath = '書き出し先パスを入力';
   static const exportPathNotNeededForPhotoLibrary = 'フォトライブラリ保存時は不要';
   static const select = '選択';
-  static const frameExport = 'フレーム書き出し';
-  static const exportCurrentFrameImage = 'キャプチャー';
+  static const frameExport = 'キャプチャ';
+  static const exportCurrentFrameImage = 'キャプチャ';
   static const export = '書き出し';
   static const exportMp4 = 'ムービー カキダシ';
   static const exportGif = 'ジフ カキダシ';

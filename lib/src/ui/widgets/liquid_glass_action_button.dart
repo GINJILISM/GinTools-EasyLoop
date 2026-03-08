@@ -10,6 +10,7 @@ class LiquidGlassActionButton extends StatefulWidget {
     required this.onPressed,
     required this.icon,
     required this.label,
+    this.showLabel = true,
     this.style,
     this.primary = false,
     this.fillColor,
@@ -20,6 +21,7 @@ class LiquidGlassActionButton extends StatefulWidget {
   final VoidCallback? onPressed;
   final Widget icon;
   final Widget label;
+  final bool showLabel;
   final ButtonStyle? style;
   final bool primary;
   final Color? fillColor;
@@ -75,6 +77,7 @@ class _LiquidGlassActionButtonState extends State<LiquidGlassActionButton> {
         height: LiquidGlassRefs.exportButtonHeight,
         icon: widget.icon,
         label: widget.label,
+        showLabel: widget.showLabel,
         iconColor: fg,
         disabledIconColor: disabledFg,
         labelStyle: actionLabelBaseStyle,
@@ -171,6 +174,7 @@ class _EmbossedActionButtonFace extends StatelessWidget {
     required this.height,
     required this.icon,
     required this.label,
+    required this.showLabel,
     required this.iconColor,
     required this.disabledIconColor,
     required this.labelStyle,
@@ -186,6 +190,7 @@ class _EmbossedActionButtonFace extends StatelessWidget {
   final double height;
   final Widget icon;
   final Widget label;
+  final bool showLabel;
   final Color iconColor;
   final Color disabledIconColor;
   final TextStyle? labelStyle;
@@ -242,22 +247,24 @@ class _EmbossedActionButtonFace extends StatelessWidget {
                     data: IconThemeData(color: effectiveForeground),
                     child: icon,
                   ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: DefaultTextStyle(
-                      style: labelStyle?.copyWith(
-                            color: effectiveForeground,
-                            fontWeight: FontWeight.w700,
-                          ) ??
-                          TextStyle(
-                            color: effectiveForeground,
-                            fontWeight: FontWeight.w700,
-                          ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      child: label,
+                  if (showLabel) ...<Widget>[
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: DefaultTextStyle(
+                        style: labelStyle?.copyWith(
+                              color: effectiveForeground,
+                              fontWeight: FontWeight.w700,
+                            ) ??
+                            TextStyle(
+                              color: effectiveForeground,
+                              fontWeight: FontWeight.w700,
+                            ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        child: label,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),

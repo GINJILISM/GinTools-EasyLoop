@@ -115,8 +115,8 @@ class EditorShell extends StatelessWidget {
     final isCompact = screenWidth < 420;
     final previewGap = isCompact ? 4.0 : 6.0;
     final cardsGap = isCompact ? 6.0 : 8.0;
-    final timelineCardHeight = isCompact ? 132.0 : 168.0;
-    final controlCardHeight = isCompact ? 120.0 : 138.0;
+    final timelineCardHeight = isCompact ? 118.0 : 168.0;
+    final controlCardHeight = isCompact ? 150.0 : 138.0;
 
     final body = SafeArea(
       top: false,

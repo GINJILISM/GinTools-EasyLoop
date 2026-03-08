@@ -141,16 +141,31 @@ class PlaybackTransportBar extends StatelessWidget {
       ),
     ];
 
-    final buttonsCore = SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: _withSpacing(
-          buttons,
-          spacing: LiquidGlassRefs.transportButtonBlendSpacing,
-        ),
+    final buttonsRow = Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: _withSpacing(
+        buttons,
+        spacing: LiquidGlassRefs.transportButtonBlendSpacing,
       ),
+    );
+
+    final buttonsCore = LayoutBuilder(
+      builder: (context, constraints) {
+        if (!constraints.maxWidth.isFinite) {
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: buttonsRow,
+          );
+        }
+        return Align(
+          alignment: Alignment.center,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: buttonsRow,
+          ),
+        );
+      },
     );
 
     final groupedButtons = Padding(
