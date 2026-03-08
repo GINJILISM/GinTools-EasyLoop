@@ -8,6 +8,7 @@ import '../../design/typography/app_font_roles.dart';
 import '../../services/file_import_service.dart';
 import '../liquid_glass/liquid_glass_refs.dart';
 import '../app_strings.dart';
+import '../widgets/liquid_glass_action_button.dart';
 
 class ImportScreen extends StatefulWidget {
   const ImportScreen({super.key, required this.onVideoSelected});
@@ -114,23 +115,33 @@ class _ImportScreenState extends State<ImportScreen> {
             runSpacing: 10,
             alignment: WrapAlignment.center,
             children: <Widget>[
-              FilledButton(
-                onPressed: _isPicking ? null : _pickFile,
-                style: FilledButton.styleFrom(
-                  backgroundColor: LiquidGlassRefs.accentOrange,
+              SizedBox(
+                width: 166,
+                child: LiquidGlassActionButton.icon(
+                  onPressed: _isPicking ? null : _pickFile,
+                  fillColor: LiquidGlassRefs.accentOrange,
                   foregroundColor: Colors.white,
-                  textStyle: primaryActionTextStyle,
+                  borderColor: const Color(0x66CFE9FF),
+                  icon: const Icon(Icons.folder_open_rounded),
+                  label: const Text(AppStrings.openFromFile),
+                  style: ButtonStyle(
+                    textStyle: WidgetStatePropertyAll(primaryActionTextStyle),
+                  ),
                 ),
-                child: const Text(AppStrings.openFromFile),
               ),
-              FilledButton(
-                onPressed: _isPicking ? null : _openLibrary,
-                style: FilledButton.styleFrom(
-                  backgroundColor: LiquidGlassRefs.accentOrangeMuted,
+              SizedBox(
+                width: 236,
+                child: LiquidGlassActionButton.icon(
+                  onPressed: _isPicking ? null : _openLibrary,
+                  fillColor: LiquidGlassRefs.accentOrangeMuted,
                   foregroundColor: LiquidGlassRefs.textPrimary,
-                  textStyle: primaryActionTextStyle,
+                  borderColor: const Color.fromARGB(80, 255, 255, 255),
+                  icon: const Icon(Icons.photo_library_rounded),
+                  label: const Text(AppStrings.openFromLibrary),
+                  style: ButtonStyle(
+                    textStyle: WidgetStatePropertyAll(primaryActionTextStyle),
+                  ),
                 ),
-                child: const Text(AppStrings.openFromLibrary),
               ),
             ],
           ),

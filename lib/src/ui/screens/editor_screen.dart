@@ -1885,9 +1885,9 @@ class _EditorScreenState extends State<EditorScreen> {
           children: <Widget>[
             Expanded(
               child: LiquidGlassActionButton.icon(
-                fillColor: LiquidGlassRefs.accentOrange.withValues(alpha: 0.5),
-                foregroundColor: LiquidGlassRefs.textPrimary,
-                borderColor: const Color.fromARGB(102, 0, 0, 0),
+                fillColor: const Color.fromRGBO(236, 154, 119, 0.94),
+                foregroundColor: Colors.white,
+                borderColor: const Color.fromRGBO(255, 244, 236, 0.36),
                 style: isMobile
                     ? const ButtonStyle(
                         visualDensity: VisualDensity.compact,
@@ -1897,7 +1897,7 @@ class _EditorScreenState extends State<EditorScreen> {
                 onPressed: exportActionDisabled
                     ? null
                     : () => _exportCurrentFrame(controller),
-                icon: const Icon(Icons.image_rounded),
+                icon: const Icon(Icons.photo_camera_rounded),
                 label: Text(
                   isMobile
                       ? AppStrings.frameExport
@@ -1921,7 +1921,11 @@ class _EditorScreenState extends State<EditorScreen> {
                 onPressed: exportActionDisabled
                     ? null
                     : () => _startExport(controller),
-                icon: const Icon(Icons.movie_creation_rounded),
+                icon: Icon(
+                  controller.exportFormat == ExportFormat.gif
+                      ? Icons.image_rounded
+                      : Icons.movie_creation_rounded,
+                ),
                 label: Text(
                   controller.exportFormat == ExportFormat.gif
                       ? AppStrings.exportGif

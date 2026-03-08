@@ -29,6 +29,16 @@ abstract final class LiquidGlassRefs {
   static const Color transportBoundaryButtonColor =
       Color.fromARGB(141, 227, 227, 227);
   static const Color transportSecondaryButtonColor = Color(0x22BDE6FF);
+  static const double transportPedestalRadius = 20;
+  static const double transportPedestalInset = 5;
+  static const Color transportPedestalTopColor =
+      Color.fromRGBO(188, 194, 198, 0.26);
+  static const Color transportPedestalBottomColor =
+      Color.fromRGBO(18, 20, 22, 0.48);
+  static const Color transportPedestalOutlineColor =
+      Color.fromRGBO(255, 255, 255, 0.22);
+  static const Color transportPedestalInnerShadowColor =
+      Color.fromRGBO(0, 0, 0, 0.26);
 
   // Timeline trim-range liquid overlay.
   static const double timelineSelectionGlassHorizontalInset = 0;
@@ -137,6 +147,9 @@ abstract final class LiquidGlassRefs {
   static const double exportButtonRadius = 999;
   static const double exportButtonHorizontalPadding = 14;
   static const double exportButtonGap = 8;
+  static const double exportButtonEmbossInset = 3;
+  static const double exportButtonPressDepth = 4;
+  static const double exportButtonPressDepthWindows = 2.5;
   static const LiquidGlassSettings exportButtonLayerSettings =
       LiquidGlassSettings(
     thickness: 30,
@@ -186,6 +199,10 @@ abstract final class LiquidGlassRefs {
   static const double buttonInteractionScaleWindows = 1.02;
   static const double buttonPrimaryGlowRadius = 1.0;
   static const double buttonSecondaryGlowRadius = 0.8;
+  static const double buttonEmbossRadius = 14;
+  static const double buttonEmbossInset = 3;
+  static const double buttonPressDepth = 5;
+  static const double buttonPressDepthWindows = 3;
   static const Color buttonPrimaryGlowColor = Color.fromARGB(97, 255, 255, 255);
   static const Color buttonSecondaryGlowColor =
       Color.fromRGBO(255, 255, 255, 0.239);
