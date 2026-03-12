@@ -37,8 +37,22 @@ class LaunchFileService {
     }
     _isInitialized = true;
 
-    _initialPath = _resolveInitialPath();
     _channel.setMethodCallHandler(_handleMethodCall);
+    try {
+      await _channel.invokeMethod<void>('notifyFlutterReady');
+      final pendingArgs = await _channel.invokeMethod<dynamic>(
+        'consumePendingOpenFiles',
+      );
+      if (pendingArgs != null) {
+        await _handleMethodCall(MethodCall('onOpenFile', pendingArgs));
+      }
+    } on MissingPluginException {
+      // Desktop/other platforms may not expose the native bridge.
+    } on PlatformException {
+      // Ignore bridge handshake failures and continue with startup args only.
+    }
+
+    _initialPath ??= _resolveInitialPath();
   }
 
   Future<String?> getInitialFilePath() async {

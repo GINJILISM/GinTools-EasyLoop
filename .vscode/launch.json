@@ -5,6 +5,12 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Flutter: Attach to Device",
+            "type": "dart",
+            "request": "attach"
+        },
+        
+        {
             "name": "GinTools-EasyLoop",
             "request": "launch",
             "type": "dart"
@@ -20,6 +26,20 @@
             "request": "launch",
             "type": "dart",
             "flutterMode": "release"
+        },
+        {
+            "name": "GinTools-EasyLoop (profile no-debug)",
+            "request": "launch",
+            "type": "dart",
+            "flutterMode": "profile",
+            "noDebug": true
+        },
+        {
+            "name": "GinTools-EasyLoop (release no-debug)",
+            "request": "launch",
+            "type": "dart",
+            "flutterMode": "release",
+            "noDebug": true
         }
     ]
 }

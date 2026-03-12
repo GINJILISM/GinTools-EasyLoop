@@ -120,7 +120,7 @@ class TimelineThumbnailService {
       effectiveTargetCount = effectiveTargetCount.clamp(6, _iosMaxTargetCount);
     }
     if (targetCountCap != null) {
-      effectiveTargetCount = effectiveTargetCount.clamp(6, targetCountCap);
+      effectiveTargetCount = effectiveTargetCount.clamp(2, targetCountCap);
     }
 
     final span = totalSeconds / effectiveTargetCount;
@@ -143,12 +143,12 @@ class TimelineThumbnailService {
           processingInputPath,
           '-frames:v',
           '1',
+          '-update',
+          '1',
           '-vf',
           'scale=96:-2',
           '-q:v',
           '18',
-          '-f',
-          'image2',
           outputPath,
         ],
       );
@@ -168,10 +168,10 @@ class TimelineThumbnailService {
             processingInputPath,
             '-frames:v',
             '1',
+            '-update',
+            '1',
             '-vf',
             'scale=96:-2',
-            '-f',
-            'image2',
             outputPath,
           ],
         );
@@ -213,12 +213,20 @@ class TimelineThumbnailService {
     final extension = p.extension(resolvedPath).trim();
     final stagingDir = Directory(p.join(cacheRoot.path, 'timeline_inputs'));
     await stagingDir.create(recursive: true);
+    final stat = await inputFile.stat();
+    final sourceDigest = md5
+        .convert(
+          utf8.encode(
+            '$resolvedPath|${stat.modified.millisecondsSinceEpoch}|${stat.size}',
+          ),
+        )
+        .toString();
     final stagedPath = p.join(
       stagingDir.path,
-      'input_$cacheKey${extension.isEmpty ? '.mp4' : extension}',
+      'input_$sourceDigest${extension.isEmpty ? '.mp4' : extension}',
     );
 
-    if (!p.equals(resolvedPath, stagedPath)) {
+    if (!p.equals(resolvedPath, stagedPath) && !await File(stagedPath).exists()) {
       await inputFile.copy(stagedPath);
     }
     return stagedPath;

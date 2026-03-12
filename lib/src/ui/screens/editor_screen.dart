@@ -62,7 +62,7 @@ class _EditorScreenState extends State<EditorScreen> {
   static const double _defaultFrameRate = 30.0;
   static const double _reverseStartBoundaryEpsilonSeconds = 0.03;
   static const double _reverseStepSeconds = 1 / _defaultFrameRate;
-  static const int _initialMobileThumbnailCount = 8;
+  static const int _initialMobileThumbnailCount = 2;
   static const Duration _slowOpenIndicatorDelay = Duration(seconds: 2);
 
   static const String _prefExportFormat = 'export_format';
@@ -98,6 +98,7 @@ class _EditorScreenState extends State<EditorScreen> {
   Timer? _settingsPersistDebounce;
   Timer? _durationProbeFallbackTimer;
   Timer? _slowOpenIndicatorTimer;
+  Timer? _postLaunchThumbnailTimer;
 
   bool _reverseTickBusy = false;
   bool _isScrubSeekInFlight = false;
@@ -105,7 +106,7 @@ class _EditorScreenState extends State<EditorScreen> {
   bool _thumbnailBuildPending = false;
   bool _thumbnailBuildPendingForce = false;
 
-  bool _isPlaybackActive = true;
+  bool _isPlaybackActive = false;
   bool _isReverseDirection = false;
   bool _isSeekingByReverseTicker = false;
   bool _isLoadingThumbnails = false;
@@ -114,6 +115,7 @@ class _EditorScreenState extends State<EditorScreen> {
   bool _isLoopBoundaryTransitioning = false;
   bool _quickThumbnailPhaseCompleted = false;
   bool _isSlowOpeningVisible = false;
+  bool _allowFullThumbnailPassOnMobile = false;
 
   bool _resumePlaybackAfterScrub = false;
   bool _resumeReverseAfterScrub = false;
@@ -159,6 +161,7 @@ class _EditorScreenState extends State<EditorScreen> {
   void initState() {
     super.initState();
 
+    MediaKit.ensureInitialized();
     _player = Player();
     _videoController = VideoController(_player);
     _editorController = EditorController(
@@ -289,10 +292,16 @@ class _EditorScreenState extends State<EditorScreen> {
       debugPrint(
           '[EditorInit] player.open done: ${initializeTimer.elapsedMilliseconds}ms');
       await _player.seek(Duration.zero);
-      await _player.play();
-      _scheduleThumbnailBuild(force: true);
-      debugPrint(
-          '[EditorInit] first playback started: ${initializeTimer.elapsedMilliseconds}ms');
+      final autoPlayOnStartup = kIsWeb || !Platform.isIOS;
+      if (autoPlayOnStartup) {
+        await _player.play();
+        _isPlaybackActive = true;
+      } else {
+        _isPlaybackActive = false;
+      }
+      _scheduleInitialThumbnailBuild();
+        debugPrint(
+          '[EditorInit] startup media ready: ${initializeTimer.elapsedMilliseconds}ms');
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -313,6 +322,22 @@ class _EditorScreenState extends State<EditorScreen> {
         return;
       }
       setState(() => _isSlowOpeningVisible = true);
+    });
+  }
+
+  void _scheduleInitialThumbnailBuild() {
+    if (!kIsWeb && Platform.isIOS) {
+      return;
+    }
+    _postLaunchThumbnailTimer?.cancel();
+    final delay = _isMobilePlatform
+        ? const Duration(milliseconds: 1400)
+        : Duration.zero;
+    _postLaunchThumbnailTimer = Timer(delay, () {
+      if (!mounted) {
+        return;
+      }
+      _scheduleThumbnailBuild(force: true);
     });
   }
 
@@ -568,6 +593,11 @@ class _EditorScreenState extends State<EditorScreen> {
       final runQuickPass = _isMobilePlatform &&
           !_quickThumbnailPhaseCompleted &&
           _thumbnails.isEmpty;
+      if (_isMobilePlatform &&
+          !runQuickPass &&
+          !_allowFullThumbnailPassOnMobile) {
+        return;
+      }
       final thumbnails = await _thumbnailService.buildStrip(
         inputPath: widget.inputPath,
         duration: _editorController.totalDuration,
@@ -610,7 +640,9 @@ class _EditorScreenState extends State<EditorScreen> {
 
       if (runQuickPass) {
         _quickThumbnailPhaseCompleted = true;
-        _scheduleThumbnailBuild(force: true);
+        if (!_isMobilePlatform) {
+          _scheduleThumbnailBuild(force: true);
+        }
       }
     } finally {
       if (mounted && generation == _thumbnailGeneration) {
@@ -621,6 +653,14 @@ class _EditorScreenState extends State<EditorScreen> {
         }
       }
     }
+  }
+
+  void _enableFullThumbnailPassOnMobile() {
+    if (!_isMobilePlatform || _allowFullThumbnailPassOnMobile) {
+      return;
+    }
+    _allowFullThumbnailPassOnMobile = true;
+    _scheduleThumbnailBuild(force: false);
   }
 
   void _applyDeferredThumbnailUpdates() {
@@ -764,6 +804,7 @@ class _EditorScreenState extends State<EditorScreen> {
       await _player.pause();
     } else {
       _isPlaybackActive = true;
+      _enableFullThumbnailPassOnMobile();
       final trimEnd = _editorController.trimEndSeconds;
       final boundary = trimEnd;
       if (_editorController.loopMode == LoopMode.pingPong &&
@@ -841,6 +882,7 @@ class _EditorScreenState extends State<EditorScreen> {
     if (_editorController.isExporting || _isScrubbing) {
       return;
     }
+    _enableFullThumbnailPassOnMobile();
     _isScrubbing = true;
     _isLoopBoundaryTransitioning = false;
     _resumePlaybackAfterScrub = _isPlaybackActive;
@@ -1333,6 +1375,7 @@ class _EditorScreenState extends State<EditorScreen> {
     _settingsPersistDebounce?.cancel();
     _durationProbeFallbackTimer?.cancel();
     _slowOpenIndicatorTimer?.cancel();
+    _postLaunchThumbnailTimer?.cancel();
     _stopReverseTicker();
     _durationSubscription?.cancel();
     _positionSubscription?.cancel();
@@ -1467,12 +1510,13 @@ class _EditorScreenState extends State<EditorScreen> {
                             return;
                           }
                           _timelineViewportWidth = width;
-                          _scheduleThumbnailBuild(force: true);
+                          _scheduleThumbnailBuild(force: !_isMobilePlatform);
                         },
                         onSeek: (seconds) {
                           if (controller.isExporting) {
                             return;
                           }
+                          _enableFullThumbnailPassOnMobile();
                           unawaited(_seekTo(seconds));
                         },
                         onScrubStart:
@@ -1487,6 +1531,7 @@ class _EditorScreenState extends State<EditorScreen> {
                         onPinchZoomChanged: controller.isExporting
                             ? null
                             : (zoomLevel) {
+                                _enableFullThumbnailPassOnMobile();
                                 controller.setZoomLevel(zoomLevel);
                                 _scheduleThumbnailBuild(force: false);
                               },
@@ -1495,6 +1540,7 @@ class _EditorScreenState extends State<EditorScreen> {
                               controller.isFrameExporting) {
                             return;
                           }
+                          _enableFullThumbnailPassOnMobile();
                           controller.setTrimRange(
                             startSeconds: start,
                             endSeconds: end,

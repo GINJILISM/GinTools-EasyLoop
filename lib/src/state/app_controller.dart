@@ -28,6 +28,9 @@ class AppController extends ChangeNotifier {
 
   void openInputPath(String path, {bool replaceCurrent = false}) {
     final isSamePath = _inputPath == path;
+    if (replaceCurrent && isSamePath && _sessionVersion == 0) {
+      return;
+    }
     _inputPath = path;
     if (replaceCurrent || isSamePath) {
       _sessionVersion += 1;

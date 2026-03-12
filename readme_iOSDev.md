@@ -15,6 +15,86 @@ Flutter + Xcode での iOS 開発フローをまとめたものです。
 - 直近の最優先は「共有シート → EasyLoop起動 → エディター画面で即編集開始」の再現性向上
 - この課題は **今後の改善タスク** として継続管理する
 
+## 0-2. 2026-03 実機再起動問題の記録（今回解消した内容）
+
+### 症状
+
+- Xcode からの直接起動では動作する
+- しかし、アプリをタスクキル後にホーム画面から開くと、青画面のまま停止することがあった
+- 端末ログには `FBSceneManager ... scene-creation-failed` が断続的に出ることがあった
+- Debug 接続時だけ起動し、通常再起動では止まるケースもあった
+
+### 調査中に混ざっていた別要因
+
+- 開発者証明書が未信頼
+- 端末空き容量不足（`No space left on device`）
+- LLDB 接続による起動遅延
+
+これらはそれぞれ対処が必要だが、**青画面停止の本質原因そのものではなかった**。
+
+### 最終的に安定化へ効いた構成
+
+1. **iOS ネイティブ起動経路の標準化**
+  - `AppDelegate` を `FlutterImplicitEngineDelegate` ベースへ整理
+  - `SceneDelegate` を `FlutterSceneDelegate` 継承の最小構成に戻す
+  - `UIApplicationSceneManifest` は維持しつつ、`UIMainStoryboardFile` を削除
+2. **Flutter 初期化の軽量化**
+  - `MediaKit.ensureInitialized()` を `main()` から外して遅延
+  - iOS 起動直後の自動再生を抑止
+  - 初回サムネイル生成を抑え、起動後の重処理を後ろ倒し
+  - 同一路径の二重 reopen を防ぐガードを追加
+3. **検証手段の見直し**
+  - 実機の真の再起動挙動確認は Debug ではなく `profile no-debug` を優先
+  - 「Xcode から起動できるか」ではなく「ホーム画面から再起動できるか」を成功条件に変更
+
+### 現在の到達点
+
+- Runner 本体の再起動問題は解消
+- 共有シートから本体起動後、共有動画を直接編集画面へ渡すところまで復旧
+- 以後の iOS 調査では、**本体起動の安定性を壊していないことを先に確認してから共有シートへ進む**
+
+### 0-3. 共有シート直行復旧の記録（2026-03）
+
+#### 発生していた症状
+
+- 共有シートから `EasyLoop` を選ぶと本体アプリ自体は開く
+- しかし Flutter 側へ共有動画パスが届かず、インポート画面のまま止まる
+
+#### 原因
+
+- iOS の scene ベース起動では、共有 URL は `SceneDelegate` 側で拾う必要がある
+- さらに、本体起動直後は Flutter の MethodChannel がまだ準備前のことがあり、受信イベントを即時送信すると取りこぼす
+
+#### 最終的に有効だった構成
+
+1. `SceneDelegate` で `willConnectTo` / `openURLContexts` の両方から共有 URL を受ける
+2. App Group 共有領域の動画を本体側でテンポラリへ materialize する
+3. `AppDelegate` で共有イベントを保留キューに積む
+4. Flutter 側の `LaunchFileService` 初期化時に
+  - `notifyFlutterReady`
+  - `consumePendingOpenFiles`
+  を呼び、保留中の共有パスを必ず回収する
+5. `AppController` 側の二重 reopen 防止ガードを維持する
+
+#### 今後の変更で戻さないための注意
+
+次を削る・単純化しすぎると、再び **「本体は開くが編集画面に遷移しない」** 状態へ戻りやすい。
+
+- [ios/Runner/SceneDelegate.swift](ios/Runner/SceneDelegate.swift)
+- [ios/Runner/AppDelegate.swift](ios/Runner/AppDelegate.swift)
+- [lib/src/services/launch_file_service.dart](lib/src/services/launch_file_service.dart)
+- [lib/src/state/app_controller.dart](lib/src/state/app_controller.dart)
+
+特に以下はセットで必要。
+
+- scene URL 受信
+- App Group → 本体テンポラリへの materialize
+- ネイティブ側 pending queue
+- Flutter ready 通知と pending 回収
+- 二重 reopen 防止
+
+どれか 1 つだけ欠けても、共有シート導線は壊れる可能性が高い。
+
 ---
 
 ## 1. 事前準備（Mac側）
