@@ -79,7 +79,7 @@ flutter:
         - asset: lib/src/design/font/YDWyadewanoji.otf
 
 msix_config:
-  display_name: GinTools-EasyLoop
+  display_name: イージーループ
   publisher_display_name: GinTools
   identity_name: com.gintools.loopvideoeditor
   msix_version: 1.0.0.0

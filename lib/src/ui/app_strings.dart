@@ -1,6 +1,8 @@
 class AppStrings {
   AppStrings._();
 
+    static const appName = 'イージーループ';
+
   // Import screen
   static const fileAppVideoPickerTitle = '選択';
   static const importScreenTitle = 'インポート';

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'ui/app_strings.dart';
 import 'ui/screens/root_screen.dart';
 
 class LoopEditorApp extends StatelessWidget {
@@ -8,7 +9,7 @@ class LoopEditorApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'GinTools-EasyLoop',
+      title: AppStrings.appName,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(

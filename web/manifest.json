@@ -1,11 +1,11 @@
 {
-    "name": "gintoolflutter",
-    "short_name": "gintoolflutter",
+    "name": "イージーループ",
+    "short_name": "イージーループ",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "ムービーをサッと切り出して、ループを書き出す。イージーループ。",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

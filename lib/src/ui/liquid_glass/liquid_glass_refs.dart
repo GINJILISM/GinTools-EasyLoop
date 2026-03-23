@@ -76,7 +76,7 @@ abstract final class LiquidGlassRefs {
   static const double timelineSelectionStretch = 0.1;
   static const double timelineSelectionInteractionScale = 1.01;
   static const double timelineSelectionStretchWindows = 0.16;
-  static const double timelineSelectionInteractionScaleWindows = 1.01;
+  static const double timelineSelectionInteractionScaleWindows = 1.015;
   static const Duration timelineTrimHandleInertiaDuration = Duration(
     milliseconds: 520,
   );
@@ -169,7 +169,7 @@ abstract final class LiquidGlassRefs {
     saturation: 1.06,
   );
   static const double exportButtonStretch = 0.28;
-  static const double exportButtonInteractionScale = 1.03;
+  static const double exportButtonInteractionScale = 1.01;
   static const double exportButtonStretchWindows = 0.12;
   static const double exportButtonInteractionScaleWindows = 1.015;
 
@@ -194,9 +194,9 @@ abstract final class LiquidGlassRefs {
 
   // Interactive button parameters.
   static const double buttonStretch = 0.45;
-  static const double buttonInteractionScale = 1.3;
+  static const double buttonInteractionScale = 1.01;
   static const double buttonStretchWindows = 0.12;
-  static const double buttonInteractionScaleWindows = 1.02;
+  static const double buttonInteractionScaleWindows = 1.015;
   static const double buttonPrimaryGlowRadius = 1.0;
   static const double buttonSecondaryGlowRadius = 0.8;
   static const double buttonEmbossRadius = 14;
